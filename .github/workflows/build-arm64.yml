@@ -1,4 +1,4 @@
-name: Build ARM64 AppImage & DroidDeck Portable (Armada OS / DroidDeck)
+name: Build ARMSSella ARM64 AppImage & DroidDeck Portable (Armada OS / DroidDeck)
 
 on:
   workflow_dispatch:
@@ -60,15 +60,15 @@ jobs:
 
       - name: Verify AppImage & Portable Execution (FUSE-free & DroidDeck Smoke Tests)
         run: |
-          chmod +x ASSella-arm64.AppImage
+          chmod +x ARMSSella-arm64.AppImage
           # Verify headless check-updates runs cleanly on native aarch64 (Armada OS mode)
-          ASSELLA_FORCE_ARMADA=1 APPIMAGE_EXTRACT_AND_RUN=1 ./ASSella-arm64.AppImage --headless --check-updates
+          ARMSSELLA_FORCE_ARMADA=1 APPIMAGE_EXTRACT_AND_RUN=1 ./ARMSSella-arm64.AppImage --headless --check-updates
           # Verify FUSE-free portable bundle runs cleanly in simulated DroidDeck mode
           mkdir -p /tmp/dd-smoke
-          tar -xzf ASSella-arm64-portable.tar.gz -C /tmp/dd-smoke
-          ASSELLA_FORCE_DROIDDECK=1 /tmp/dd-smoke/AppDir/AppRun --headless --check-updates
+          tar -xzf ARMSSella-arm64-portable.tar.gz -C /tmp/dd-smoke
+          ARMSSELLA_FORCE_DROIDDECK=1 /tmp/dd-smoke/AppDir/AppRun --headless --check-updates
           rm -rf /tmp/dd-smoke
-          echo "ARM64 Armada OS & DroidDeck smoke-tests passed successfully!"
+          echo "ARMSSella Armada OS & DroidDeck smoke-tests passed successfully!"
 
       - name: Run ARM64 & DroidDeck Unit Tests and Import Checks
         run: |
@@ -81,13 +81,13 @@ jobs:
       - name: Upload ARM64 Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ASSella-arm64-AppImage
+          name: ARMSSella-arm64
           path: |
-            ASSella-arm64.AppImage
-            ASSella-arm64.AppImage.sha256
-            ASSella-arm64.AppImage.zsync
-            ASSella-arm64-portable.tar.gz
-            ASSella-arm64-portable.tar.gz.sha256
+            ARMSSella-arm64.AppImage
+            ARMSSella-arm64.AppImage.sha256
+            ARMSSella-arm64.AppImage.zsync
+            ARMSSella-arm64-portable.tar.gz
+            ARMSSella-arm64-portable.tar.gz.sha256
 
       - name: Publish GitHub Pre-Release (on ARM64 tags or manual publish)
         if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
@@ -97,8 +97,8 @@ jobs:
           prerelease: true
           generate_release_notes: true
           files: |
-            ASSella-arm64.AppImage
-            ASSella-arm64.AppImage.sha256
-            ASSella-arm64.AppImage.zsync
-            ASSella-arm64-portable.tar.gz
-            ASSella-arm64-portable.tar.gz.sha256
+            ARMSSella-arm64.AppImage
+            ARMSSella-arm64.AppImage.sha256
+            ARMSSella-arm64.AppImage.zsync
+            ARMSSella-arm64-portable.tar.gz
+            ARMSSella-arm64-portable.tar.gz.sha256

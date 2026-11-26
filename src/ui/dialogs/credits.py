@@ -148,7 +148,7 @@ class CreditsDialog(QDialog):
         left = QVBoxLayout()
         left.setSpacing(3)
 
-        name = QLabel("ASSELA")
+        name = QLabel("ARMSSELLA")
         name.setStyleSheet(
             f"font-size: 22px; font-weight: 900; color: {self.accent_color}; letter-spacing: 3px;"
         )

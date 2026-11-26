@@ -78,7 +78,7 @@ def main():
     migrate_databases_to_db_folder()
 
     logger.info("========================================")
-    logger.info(f"ASSELA {app_version} starting...")
+    logger.info(f"ARMSSella {app_version} starting...")
     logger.info("========================================")
 
     try:
@@ -105,8 +105,8 @@ def main():
         )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("ASSella")
-    app.setDesktopFileName("assella")
+    app.setApplicationName("ARMSSella")
+    app.setDesktopFileName("armssella")
 
     # Eagerly initialize the main-thread dispatch bridge so background tasks
     # can safely post to the GUI event loop.

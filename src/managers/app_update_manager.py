@@ -85,6 +85,8 @@ def _resolve_appimage_path() -> str:
     is_arm = _is_arm64_host()
     default_candidates = (
         [
+            os.path.expanduser("~/.local/share/ARMSSella/ARMSSella-arm64.AppImage"),
+            os.path.expanduser("~/.local/share/ACCELA/ARMSSella-arm64.AppImage"),
             os.path.expanduser("~/.local/share/ACCELA/ASSella-arm64.AppImage"),
             os.path.expanduser("~/.local/share/ASSella/ASSella-arm64.AppImage"),
             os.path.expanduser("~/.local/share/ACCELA/ASSella.AppImage"),
@@ -136,7 +138,7 @@ def _cleanup_scratch_files(
     keep: Optional[Path] = None,
 ) -> None:
     """Remove temporary delta and download scratch files (including .part)."""
-    prefixes = {base_name, "ASSella.AppImage", "ASSella-arm64.AppImage"}
+    prefixes = {base_name, "ARMSSella-arm64.AppImage", "ASSella-arm64.AppImage", "ASSella.AppImage"}
     suffixes = (
         ".part",
         ".autoupdate",
@@ -475,7 +477,11 @@ def _extract_release_assets(release_data: Dict[str, Any]) -> Tuple[str, Optional
         asset_is_arm = _is_arm64_asset_name(low)
         if low.endswith(".appimage.zsync"):
             if is_arm:
-                if asset_is_arm and (low == "assella-arm64.appimage.zsync" or not zsync_url):
+                if asset_is_arm and (
+                    low == "armssella-arm64.appimage.zsync"
+                    or (low == "assella-arm64.appimage.zsync" and (not zsync_url or "armssella" not in zsync_url.lower()))
+                    or not zsync_url
+                ):
                     zsync_url = url
             else:
                 if not asset_is_arm and (low == "assella.appimage.zsync" or not zsync_url):
@@ -492,8 +498,16 @@ def _extract_release_assets(release_data: Dict[str, Any]) -> Tuple[str, Optional
                 if raw_digest.startswith("sha256:"):
                     raw_sha = raw_digest[len("sha256:"):].strip()
             sha = raw_sha if re.fullmatch(r"[0-9a-f]{64}", raw_sha) else None
-            preferred_name = "ASSella-arm64.AppImage" if is_arm else "ASSella.AppImage"
-            if name == preferred_name:
+            if is_arm:
+                if name == "ARMSSella-arm64.AppImage":
+                    download_url = url
+                    appimage_sha = sha
+                    continue
+                if name == "ASSella-arm64.AppImage" and not download_url:
+                    download_url = url
+                    appimage_sha = sha
+                    continue
+            elif name == "ASSella.AppImage":
                 download_url = url
                 appimage_sha = sha
                 continue
@@ -518,9 +532,13 @@ def _resolve_sha256_sidecar(release_data: Dict[str, Any], download_url: str) -> 
     if not download_url:
         return None, False
     is_arm = _is_arm64_host()
-    default_sidecar = "assella-arm64.appimage.sha256" if is_arm else "assella.appimage.sha256"
+    default_sidecars = (
+        ("armssella-arm64.appimage.sha256", "assella-arm64.appimage.sha256")
+        if is_arm
+        else ("assella.appimage.sha256",)
+    )
     dl_basename = download_url.rstrip("/").rsplit("/", 1)[-1].lower()
-    preferred = f"{dl_basename}.sha256" if dl_basename else default_sidecar
+    preferred = f"{dl_basename}.sha256" if dl_basename else default_sidecars[0]
     fallback_sha_url: Optional[str] = None
     for asset in release_data.get("assets", []):
         if not isinstance(asset, dict):
@@ -531,11 +549,23 @@ def _resolve_sha256_sidecar(release_data: Dict[str, Any], download_url: str) -> 
             continue
         if name == preferred:
             return url, True
-        if name == default_sidecar and fallback_sha_url is None:
+        if name in default_sidecars and fallback_sha_url is None:
             fallback_sha_url = url
     if fallback_sha_url:
         return fallback_sha_url, True
     return f"{download_url}.sha256", False
+
+
+def _get_update_repo_slug() -> str:
+    """Return 'owner/repo' for GitHub Releases lookups (ARMSSella fork on ARM64)."""
+    override = (
+        os.environ.get("ARMSSELLA_UPDATE_REPO")
+        or os.environ.get("ASSELLA_UPDATE_REPO")
+        or ""
+    ).strip()
+    if override:
+        return override.replace("|", "/")
+    return "Kiat0/ARMSSella" if _is_arm64_host() else "niwia/ASSella"
 
 
 def _fetch_github_release_data(tag: str, channel: Optional[str] = None) -> Dict[str, Any]:
@@ -546,9 +576,10 @@ def _fetch_github_release_data(tag: str, channel: Optional[str] = None) -> Dict[
     if norm_channel in ("main", "master"):
         norm_channel = "stable"
 
-    headers = {"User-Agent": "ASSella-Updater", "Accept": "application/vnd.github+json"}
+    repo_slug = _get_update_repo_slug()
+    headers = {"User-Agent": "ARMSSella-Updater", "Accept": "application/vnd.github+json"}
     if not tag or tag == "latest":
-        api_url = "https://api.github.com/repos/niwia/ASSella/releases?per_page=100"
+        api_url = f"https://api.github.com/repos/{repo_slug}/releases?per_page=100"
         req = urllib.request.Request(api_url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
             releases_list = json.loads(resp.read().decode("utf-8"))
@@ -578,7 +609,7 @@ def _fetch_github_release_data(tag: str, channel: Optional[str] = None) -> Dict[
         return eligible[0] if eligible else {}
 
     def _fetch_by_tag(t: str) -> Dict[str, Any]:
-        url = f"https://api.github.com/repos/niwia/ASSella/releases/tags/{t}"
+        url = f"https://api.github.com/repos/{repo_slug}/releases/tags/{t}"
         r_req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(r_req, timeout=15) as r_resp:
             return json.loads(r_resp.read().decode("utf-8"))
@@ -916,11 +947,11 @@ class AppUpdateManager(QObject):
                         target = dest_dir / f"{appimage_name}.autoupdate"
                         shutil.copy2(appimage_path, target)
                         zsync_asset = (
-                            "ASSella-arm64.AppImage.zsync"
+                            "ARMSSella-arm64.AppImage.zsync"
                             if _is_arm64_host()
                             else "ASSella.AppImage.zsync"
                         )
-                        update_repo = os.environ.get("ASSELLA_UPDATE_REPO", "niwia|ASSella").replace("/", "|")
+                        update_repo = _get_update_repo_slug().replace("/", "|")
                         cmd = [
                             updater,
                             "-O",

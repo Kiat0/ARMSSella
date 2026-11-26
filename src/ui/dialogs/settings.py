@@ -503,7 +503,7 @@ class SettingsDialog(QDialog):
         """Register all settings pages. Each is built the first time it is opened,
         so opening Settings only pays for the page it lands on."""
         add = self.tab_widget.addLazyTab
-        add("ASSella", lambda: tabs.create_assela_tab(self))
+        add("ARMSSella", lambda: tabs.create_assela_tab(self))
         add("Downloads", lambda: tabs.create_downloads_tab(self))
         add("Advanced", lambda: tabs.create_advanced_tab(self))
         add("Integrations", lambda: tabs.create_morrenus_tab(self))

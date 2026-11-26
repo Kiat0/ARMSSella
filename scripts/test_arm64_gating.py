@@ -178,28 +178,33 @@ class TestArm64Gating(unittest.TestCase):
                     "browser_download_url": "https://example.invalid/ASSella.AppImage.zsync",
                 },
                 {
+                    "name": "ARMSSella-arm64.AppImage",
+                    "browser_download_url": "https://example.invalid/ARMSSella-arm64.AppImage",
+                    "digest": "sha256:" + ("c" * 64),
+                },
+                {
+                    "name": "ARMSSella-arm64.AppImage.zsync",
+                    "browser_download_url": "https://example.invalid/ARMSSella-arm64.AppImage.zsync",
+                },
+                {
+                    "name": "ARMSSella-arm64.AppImage.sha256",
+                    "browser_download_url": "https://example.invalid/ARMSSella-arm64.AppImage.sha256",
+                },
+                {
                     "name": "ASSella-arm64.AppImage",
                     "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage",
                     "digest": "sha256:" + ("b" * 64),
                 },
-                {
-                    "name": "ASSella-arm64.AppImage.zsync",
-                    "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage.zsync",
-                },
-                {
-                    "name": "ASSella-arm64.AppImage.sha256",
-                    "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage.sha256",
-                },
             ]
         }
         dl_url, zsync_url, sha = _extract_release_assets(mixed_release)
-        self.assertEqual(dl_url, "https://example.invalid/ASSella-arm64.AppImage")
-        self.assertEqual(zsync_url, "https://example.invalid/ASSella-arm64.AppImage.zsync")
-        self.assertEqual(sha, "b" * 64)
+        self.assertEqual(dl_url, "https://example.invalid/ARMSSella-arm64.AppImage")
+        self.assertEqual(zsync_url, "https://example.invalid/ARMSSella-arm64.AppImage.zsync")
+        self.assertEqual(sha, "c" * 64)
 
         sidecar_url, advertised = _resolve_sha256_sidecar(mixed_release, dl_url)
         self.assertTrue(advertised)
-        self.assertEqual(sidecar_url, "https://example.invalid/ASSella-arm64.AppImage.sha256")
+        self.assertEqual(sidecar_url, "https://example.invalid/ARMSSella-arm64.AppImage.sha256")
 
         x86_only_release = {
             "assets": [

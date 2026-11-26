@@ -25,7 +25,7 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$SCRIPT_DIR"
 
-echo -e "${BOLD}${BLUE}=== ASSella ARM64 AppImage Builder for Armada OS ===${NC}"
+echo -e "${BOLD}${BLUE}=== ARMSSella ARM64 AppImage Builder (Armada OS & DroidDeck) ===${NC}"
 
 # 1. Architecture Check
 HOST_ARCH=$(uname -m)
@@ -44,38 +44,39 @@ fi
 
 BUILD_DIR="$SCRIPT_DIR/build_arm64"
 APPDIR="$BUILD_DIR/AppDir"
-OUTPUT_APPIMAGE="$SCRIPT_DIR/ASSella-arm64.AppImage"
+OUTPUT_APPIMAGE="$SCRIPT_DIR/ARMSSella-arm64.AppImage"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$APPDIR/bin"
 
 # 2. Desktop Entry & Icons Setup
 echo -e "\n${BLUE}[1/7] Setting up desktop entry and icons...${NC}"
-cat << 'EOF' > "$APPDIR/assella.desktop"
+cat << 'EOF' > "$APPDIR/armssella.desktop"
 [Desktop Entry]
-Name=ASSella
-Comment=Steam Game & Depot Management Suite (ARM64)
+Name=ARMSSella
+Comment=Steam Game & Depot Management Suite (ARM64 — Armada OS & DroidDeck)
 Exec=AppRun %U
-Icon=assella
+Icon=armssella
 Terminal=false
 Type=Application
 Categories=Utility;Game;
-StartupWMClass=ASSella
+StartupWMClass=ARMSSella
 EOF
-cp "$APPDIR/assella.desktop" "$APPDIR/ACCELA.desktop"
+cp "$APPDIR/armssella.desktop" "$APPDIR/assella.desktop"
 
 mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 if [[ -f "src/res/logo/icon.svg" ]]; then
+    cp "src/res/logo/icon.svg" "$APPDIR/armssella.svg"
     cp "src/res/logo/icon.svg" "$APPDIR/assella.svg"
-    cp "src/res/logo/icon.svg" "$APPDIR/accela.svg"
-    cp "src/res/logo/icon.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/assella.svg"
+    cp "src/res/logo/icon.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/armssella.svg"
 fi
 if [[ -f "src/res/logo/icon.png" ]]; then
+    cp "src/res/logo/icon.png" "$APPDIR/armssella.png"
     cp "src/res/logo/icon.png" "$APPDIR/assella.png"
     cp "src/res/logo/icon.png" "$APPDIR/.DirIcon"
-    cp "src/res/logo/icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/assella.png"
+    cp "src/res/logo/icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/armssella.png"
 fi
 
 # 3. AppRun (Gamescope Wayland, Sandbox, Bundled .NET)
@@ -311,9 +312,9 @@ if [ -f "$STATIC_RUNTIME" ]; then
     echo "✓ Using static FUSE3-compatible aarch64 runtime."
 fi
 
-UPDATE_REPO="${UPDATE_REPO:-${GITHUB_REPOSITORY:-niwia/ASSella}}"
+UPDATE_REPO="${UPDATE_REPO:-${GITHUB_REPOSITORY:-Kiat0/ARMSSella}}"
 UPDATE_REPO_PIPE="${UPDATE_REPO/\//|}"
-UPDATE_INFO="gh-releases-zsync|${UPDATE_REPO_PIPE}|latest-pre|ASSella-arm64.AppImage.zsync"
+UPDATE_INFO="gh-releases-zsync|${UPDATE_REPO_PIPE}|latest-pre|ARMSSella-arm64.AppImage.zsync"
 ARCH=aarch64 "$APPIMAGETOOL" -n -u "$UPDATE_INFO" \
   --mksquashfs-opt -b --mksquashfs-opt 524288 \
   --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
@@ -322,7 +323,7 @@ ARCH=aarch64 "$APPIMAGETOOL" -n -u "$UPDATE_INFO" \
 sha256sum "$OUTPUT_APPIMAGE" > "${OUTPUT_APPIMAGE}.sha256"
 
 # 9. Also package FUSE-free portable tarball for DroidDeck / unrooted Android userlands
-OUTPUT_PORTABLE="$SCRIPT_DIR/ASSella-arm64-portable.tar.gz"
+OUTPUT_PORTABLE="$SCRIPT_DIR/ARMSSella-arm64-portable.tar.gz"
 echo -e "\n${BLUE}[Bonus] Packaging FUSE-free portable tarball for DroidDeck...${NC}"
 tar -czf "$OUTPUT_PORTABLE" -C "$BUILD_DIR" AppDir
 sha256sum "$OUTPUT_PORTABLE" > "${OUTPUT_PORTABLE}.sha256"
@@ -333,4 +334,4 @@ echo -e "Checksum : ${BOLD}${OUTPUT_APPIMAGE}.sha256${NC}"
 echo -e "Portable : ${BOLD}$OUTPUT_PORTABLE${NC} (FUSE-free for DroidDeck / proot / DDNATV_ROOT)"
 echo -e "Checksum : ${BOLD}${OUTPUT_PORTABLE}.sha256${NC}"
 echo -e "\n${BOLD}Smoke-testing on Armada OS / Fedora bootc container:${NC}"
-echo "  podman run --rm -v \$(pwd):/app -w /app --platform linux/arm64 fedora:41 bash -c \"APPIMAGE_EXTRACT_AND_RUN=1 ./ASSella-arm64.AppImage --headless --check-updates\""
+echo "  podman run --rm -v \$(pwd):/app -w /app --platform linux/arm64 fedora:41 bash -c \"APPIMAGE_EXTRACT_AND_RUN=1 ./ARMSSella-arm64.AppImage --headless --check-updates\""

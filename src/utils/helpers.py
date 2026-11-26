@@ -73,9 +73,10 @@ def format_bytes(num_bytes: int) -> str:
 def is_arm64() -> bool:
     """Check if the current host architecture is ARM64 / aarch64.
 
-    Can be simulated on x86_64 machines via ASSELLA_FORCE_ARM64=1.
+    Can be simulated on x86_64 machines via ARMSSELLA_FORCE_ARM64=1 or ASSELLA_FORCE_ARM64=1.
     """
-    if os.environ.get("ASSELLA_FORCE_ARM64") in ("1", "true", "True"):
+    force = os.environ.get("ARMSSELLA_FORCE_ARM64") or os.environ.get("ASSELLA_FORCE_ARM64")
+    if force in ("1", "true", "True"):
         return True
     return platform.machine().lower() in (
         "aarch64",
@@ -88,9 +89,10 @@ def is_arm64() -> bool:
 def is_armada_os() -> bool:
     """Check if the current host is running Armada OS.
 
-    Can be simulated on other systems via ASSELLA_FORCE_ARMADA=1.
+    Can be simulated on other systems via ARMSSELLA_FORCE_ARMADA=1 or ASSELLA_FORCE_ARMADA=1.
     """
-    if os.environ.get("ASSELLA_FORCE_ARMADA") in ("1", "true", "True"):
+    force = os.environ.get("ARMSSELLA_FORCE_ARMADA") or os.environ.get("ASSELLA_FORCE_ARMADA")
+    if force in ("1", "true", "True"):
         return True
     try:
         if os.path.exists("/etc/armada-release"):
@@ -117,9 +119,12 @@ def is_droiddeck() -> bool:
 
     Checks DroidDeck runtime environment variables (DD_DESKTOP, DD_LAUNCH_DIR,
     DD_INSIDE, DDNATV_ROOT, DD_STEAM_CLIENT_ARCH, DROIDDECK_PACKAGE) and
-    userland overlay binaries. Can be simulated via ASSELLA_FORCE_DROIDDECK=1.
+    userland overlay binaries. Can be simulated via ARMSSELLA_FORCE_DROIDDECK=1
+    or ASSELLA_FORCE_DROIDDECK=1.
     """
-    force = os.environ.get("ASSELLA_FORCE_DROIDDECK")
+    force = os.environ.get("ARMSSELLA_FORCE_DROIDDECK")
+    if force is None:
+        force = os.environ.get("ASSELLA_FORCE_DROIDDECK")
     if force in ("1", "true", "True"):
         return True
     if force in ("0", "false", "False"):

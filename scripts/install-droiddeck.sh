@@ -22,7 +22,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${BOLD}${BLUE}=== ASSella DroidDeck (ARM64) Installer ===${NC}"
+echo -e "${BOLD}${BLUE}=== ARMSSella DroidDeck (ARM64) Installer ===${NC}"
 
 FORCE=0
 PORTABLE_TAR=""
@@ -35,13 +35,13 @@ while [[ $# -gt 0 ]]; do
         --portable|-p)
             PORTABLE_TAR="${2:-}"
             if [[ -z "$PORTABLE_TAR" ]]; then
-                echo -e "${RED}Error: --portable requires a path to ASSella-arm64-portable.tar.gz${NC}" >&2
+                echo -e "${RED}Error: --portable requires a path to ARMSSella-arm64-portable.tar.gz${NC}" >&2
                 exit 1
             fi
             shift 2
             ;;
         --help|-h)
-            echo "Usage: $0 [--portable <ASSella-arm64-portable.tar.gz>] [--force]"
+            echo "Usage: $0 [--portable <ARMSSella-arm64-portable.tar.gz>] [--force]"
             exit 0
             ;;
         *)
@@ -68,8 +68,8 @@ fi
 
 # Always install inside the executable Linux userland HOME (never Android noexec /sdcard)
 HOME_DIR="${HOME:-/root}"
-INSTALL_DIR="${HOME_DIR}/.local/share/ASSella"
-PORTABLE_DIR="${HOME_DIR}/.local/share/ASSella-portable"
+INSTALL_DIR="${HOME_DIR}/.local/share/ARMSSella"
+PORTABLE_DIR="${HOME_DIR}/.local/share/ARMSSella-portable"
 BIN_DIR="${HOME_DIR}/.local/bin"
 DOTNET_DIR="${HOME_DIR}/.dotnet"
 APP_DIR="${HOME_DIR}/.local/share/applications"
@@ -79,7 +79,7 @@ ICON_DIR_PNG="${HOME_DIR}/.local/share/icons/hicolor/256x256/apps"
 mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR_SVG" "$ICON_DIR_PNG"
 
 # Verify target directory is not mounted noexec
-probe_exec=$(mktemp "$BIN_DIR/.assella_exec_probe.XXXXXX")
+probe_exec=$(mktemp "$BIN_DIR/.armssella_exec_probe.XXXXXX")
 printf '#!/bin/sh\nexit 0\n' > "$probe_exec"
 chmod +x "$probe_exec"
 if ! "$probe_exec" 2>/dev/null; then
@@ -97,37 +97,38 @@ install_shortcuts() {
     local icon_png_src="$3"
 
     if [[ -f "$icon_svg_src" ]]; then
-        cp -f "$icon_svg_src" "$ICON_DIR_SVG/assella.svg"
+        cp -f "$icon_svg_src" "$ICON_DIR_SVG/armssella.svg"
     fi
     if [[ -f "$icon_png_src" ]]; then
-        cp -f "$icon_png_src" "$ICON_DIR_PNG/assella.png"
+        cp -f "$icon_png_src" "$ICON_DIR_PNG/armssella.png"
     fi
 
-    local desktop_file="$APP_DIR/assella.desktop"
+    local desktop_file="$APP_DIR/armssella.desktop"
     local desktop_tmp
-    desktop_tmp=$(mktemp "${APP_DIR}/.assella.desktop.tmp.XXXXXX")
+    desktop_tmp=$(mktemp "${APP_DIR}/.armssella.desktop.tmp.XXXXXX")
     cat << EOF > "$desktop_tmp"
 [Desktop Entry]
-Name=ASSella
+Name=ARMSSella
 GenericName=Game Depot Downloader
-Comment=Steam Game & Depot Management Suite (ARM64 / DroidDeck)
+Comment=Steam Game & Depot Management Suite (ARM64 — DroidDeck)
 Exec=$launcher_path %u
-Icon=assella
+Icon=armssella
 Terminal=false
 Type=Application
 Categories=Utility;Game;
 StartupNotify=true
-StartupWMClass=ASSella
+StartupWMClass=ARMSSella
 EOF
     chmod 0644 "$desktop_tmp"
     rm -f "$desktop_file"
     mv -f "$desktop_tmp" "$desktop_file"
 
     if [[ -d "${HOME_DIR}/Desktop" ]]; then
-        cp -f "$desktop_file" "${HOME_DIR}/Desktop/ASSella.desktop"
-        chmod +x "${HOME_DIR}/Desktop/ASSella.desktop" 2>/dev/null || true
+        cp -f "$desktop_file" "${HOME_DIR}/Desktop/ARMSSella.desktop"
+        chmod +x "${HOME_DIR}/Desktop/ARMSSella.desktop" 2>/dev/null || true
     fi
-    echo -e "${GREEN}✓ Created launcher: $launcher_path${NC}"
+    ln -sf "$launcher_path" "$BIN_DIR/assella"
+    echo -e "${GREEN}✓ Created launcher: $launcher_path (alias: $BIN_DIR/assella)${NC}"
     echo -e "${GREEN}✓ Created desktop entry: $desktop_file${NC}"
 }
 
@@ -140,7 +141,7 @@ if [[ -n "$PORTABLE_TAR" ]]; then
         exit 1
     fi
     echo -e "\n${BLUE}[1/2] Extracting self-contained ARM64 portable bundle to $PORTABLE_DIR...${NC}"
-    tmp_extract=$(mktemp -d "${HOME_DIR}/.local/share/.assella-portable-tmp.XXXXXX")
+    tmp_extract=$(mktemp -d "${HOME_DIR}/.local/share/.armssella-portable-tmp.XXXXXX")
     tar -xzf "$PORTABLE_TAR" -C "$tmp_extract"
     if [[ ! -x "$tmp_extract/AppDir/AppRun" ]]; then
         rm -rf "$tmp_extract"
@@ -152,10 +153,10 @@ if [[ -n "$PORTABLE_TAR" ]]; then
     rm -rf "$tmp_extract"
 
     echo -e "\n${BLUE}[2/2] Creating DroidDeck launcher and shortcuts...${NC}"
-    LAUNCHER="$BIN_DIR/assella"
+    LAUNCHER="$BIN_DIR/armssella"
     cat << 'EOF' > "$LAUNCHER"
 #!/usr/bin/env bash
-# ASSella DroidDeck Portable Launcher (FUSE-free, bundled Python 3.13 + .NET 9)
+# ARMSSella DroidDeck Portable Launcher (FUSE-free, bundled Python 3.13 + .NET 9)
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
 export QTWEBENGINE_DISABLE_SANDBOX=1
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
@@ -168,7 +169,7 @@ export DOTNET_NOLOGO=1
 export APPIMAGE_EXTRACT_AND_RUN=1
 unset LD_AUDIT
 
-PORTABLE_DIR="${HOME:-/root}/.local/share/ASSella-portable"
+PORTABLE_DIR="${HOME:-/root}/.local/share/ARMSSella-portable"
 exec "$PORTABLE_DIR/AppRun" "$@"
 EOF
     chmod +x "$LAUNCHER"
@@ -179,8 +180,8 @@ EOF
         "$PORTABLE_DIR/bin/src/res/logo/icon.png"
 
     echo -e "\n${BOLD}${GREEN}=== DroidDeck Portable Installation Complete! ===${NC}"
-    echo -e "Launch from Konsole with: ${BOLD}assella${NC}"
-    echo -e "Or open ${BOLD}ASSella${NC} from the Desktop / Application Menu, or add ${BOLD}$LAUNCHER${NC} as a Non-Steam Game."
+    echo -e "Launch from Konsole with: ${BOLD}armssella${NC}"
+    echo -e "Or open ${BOLD}ARMSSella${NC} from the Desktop / Application Menu, or add ${BOLD}$LAUNCHER${NC} as a Non-Steam Game."
     exit 0
 fi
 
@@ -223,9 +224,9 @@ else
     echo -e "${GREEN}✓ .NET 9 runtime (ARM64) installed successfully.${NC}"
 fi
 
-echo -e "\n${BLUE}[3/5] Setting up ASSella source files...${NC}"
-REPO_URL="${ARMSSELLA_REPO_URL:-https://github.com/niwia/ASSella.git}"
-BRANCH="${ARMSSELLA_BRANCH:-arm64}"
+echo -e "\n${BLUE}[3/5] Setting up ARMSSella source files...${NC}"
+REPO_URL="${ARMSSELLA_REPO_URL:-https://github.com/Kiat0/ARMSSella.git}"
+BRANCH="${ARMSSELLA_BRANCH:-armada-main}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -f "$SCRIPT_DIR/src/main.py" ]] && [[ "$(realpath "$SCRIPT_DIR")" != "$(realpath "$INSTALL_DIR")" ]]; then
@@ -275,10 +276,10 @@ if [[ "$NEED_WIREPROXY" -eq 1 ]]; then
 fi
 
 echo -e "\n${BLUE}[5/5] Creating DroidDeck launcher, desktop entry, and icons...${NC}"
-LAUNCHER="$BIN_DIR/assella"
+LAUNCHER="$BIN_DIR/armssella"
 cat << 'EOF' > "$LAUNCHER"
 #!/usr/bin/env bash
-# ASSella DroidDeck Launcher (ARM64 / Android Linux userland)
+# ARMSSella DroidDeck Launcher (ARM64 / Android Linux userland)
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
 export QTWEBENGINE_DISABLE_SANDBOX=1
 export DOTNET_ROOT="${HOME:-/root}/.dotnet"
@@ -293,7 +294,7 @@ export DOTNET_NOLOGO=1
 export APPIMAGE_EXTRACT_AND_RUN=1
 unset LD_AUDIT
 
-INSTALL_DIR="${HOME:-/root}/.local/share/ASSella"
+INSTALL_DIR="${HOME:-/root}/.local/share/ARMSSella"
 cd "$INSTALL_DIR" || exit 1
 exec "$INSTALL_DIR/.venv/bin/python3" "$INSTALL_DIR/src/main.py" "$@"
 EOF
@@ -311,8 +312,8 @@ if ! echo "$PATH" | grep -q "$BIN_DIR"; then
 fi
 
 echo -e "\n${BOLD}${GREEN}=== DroidDeck Installation Complete! ===${NC}"
-echo -e "Ways to run ASSella on DroidDeck:"
-echo -e "  • ${BOLD}Konsole / Terminal${NC}: Run '${BOLD}assella${NC}'"
-echo -e "  • ${BOLD}Desktop Mode (KDE Plasma)${NC}: Open ASSella from the Application Menu or Desktop icon"
+echo -e "Ways to run ARMSSella on DroidDeck:"
+echo -e "  • ${BOLD}Konsole / Terminal${NC}: Run '${BOLD}armssella${NC}'"
+echo -e "  • ${BOLD}Desktop Mode (KDE Plasma)${NC}: Open ARMSSella from the Application Menu or Desktop icon"
 echo -e "  • ${BOLD}Gaming Mode (Gamescope)${NC}: In Steam -> Games -> 'Add a Non-Steam Game' -> select '${BOLD}$LAUNCHER${NC}'"
-echo -e "  • ${BOLD}Tip (AppImage)${NC}: You can also import ${BOLD}ASSella-arm64.AppImage${NC} via DroidDeck's 'Add an app' feature."
+echo -e "  • ${BOLD}Tip (AppImage)${NC}: You can also import ${BOLD}ARMSSella-arm64.AppImage${NC} via DroidDeck's 'Add an app' feature."

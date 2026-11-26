@@ -1,20 +1,20 @@
-# ASSella for ARM64 & Armada OS
+# ARMSSella for ARM64 & Armada OS
 
 ::: warning Early Testing Preview
 Native ARM64 support is currently in **early testing and active development**. Features may be experimental, incomplete, or behave unpredictably. Expect occasional manual troubleshooting as the ecosystem and tools mature.
 :::
 
 ::: danger Critical Prerequisite: SLSsteam ARM64 Release Preview Required
-To use ASSella's game management and native Steam integration on ARM64, you **must** be running an early **SLSsteam ARM64 release preview** build (the `aarm64` branch / preview builds providing `SLSsteam.so` for aarch64). 
+To use ARMSSella's game management and native Steam integration on ARM64, you **must** be running an early **SLSsteam ARM64 release preview** build (the `aarm64` branch / preview builds providing `SLSsteam.so` for aarch64). 
 
-Standard x86 SLSsteam binaries or older releases will **not** inject into native ARM64 Steam. Without an ARM64-compatible SLSsteam release preview, ASSella will safely fall back to Standalone Mode.
+Standard x86 SLSsteam binaries or older releases will **not** inject into native ARM64 Steam. Without an ARM64-compatible SLSsteam release preview, ARMSSella will safely fall back to Standalone Mode.
 :::
 
 ---
 
 ## Overview
 
-ASSella provides native 64-bit ARM (`aarch64`) builds designed specifically for modern ARM handheld devices running **Armada OS** (a Fedora `bootc` immutable gaming distribution, including AYN Odin 2/3, Retroid Pocket, and AYANEO Pocket devices) and **DroidDeck** on unrooted Android handhelds (see the dedicated [DroidDeck Guide](./droiddeck.md)).
+**ARMSSella** (ARM64 fork of `niwia/ASSella`) provides native 64-bit ARM (`aarch64`) builds designed specifically for modern ARM handheld devices running **Armada OS** (a Fedora `bootc` immutable gaming distribution, including AYN Odin 2/3, Retroid Pocket, and AYANEO Pocket devices) and **DroidDeck** on unrooted Android handhelds (see the dedicated [DroidDeck Guide](./droiddeck.md)).
 
 The ARM64 port delivers the same Material You interface, downloading workflows, and library management features available on x86, while adapting under the hood to the unique requirements of ARM handheld hardware, FEX translation, and immutable system architectures.
 
@@ -67,28 +67,28 @@ Before testing ASSella on ARM64, ensure your environment meets these requirement
 ## How to Run
 
 ### Step 1: Download the ARM64 AppImage Preview
-Obtain the latest preview binary (`ASSella-arm64.AppImage`) for your ARM64 device.
+Obtain the latest preview binary (`ARMSSella-arm64.AppImage`) for your ARM64 device.
 
 ### Step 2: Grant Execution Permissions
 Open your terminal in Desktop Mode and make the AppImage executable:
 
 ```bash
-chmod +x ASSella-arm64.AppImage
+chmod +x ARMSSella-arm64.AppImage
 ```
 
 ### Step 3: Launch in Desktop Mode
-You can launch ASSella directly from the terminal or file manager:
+You can launch ARMSSella directly from the terminal or file manager:
 
 ```bash
-./ASSella-arm64.AppImage
+./ARMSSella-arm64.AppImage
 ```
 
 ### Step 4: (Optional) Add to Steam for Game Mode
-To access ASSella directly from the handheld gaming UI:
+To access ARMSSella directly from the handheld gaming UI:
 1. Open Steam in Desktop Mode.
 2. Select **Games** $\rightarrow$ **Add a Non-Steam Game to My Library...**
-3. Browse and select `ASSella-arm64.AppImage`.
-4. Return to Gaming Mode / Gamescope and launch ASSella whenever needed.
+3. Browse and select `ARMSSella-arm64.AppImage`.
+4. Return to Gaming Mode / Gamescope and launch ARMSSella whenever needed.
 
 ---
 

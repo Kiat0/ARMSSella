@@ -513,7 +513,7 @@ class MainWindow(
 
     def _setup_window_properties(self) -> None:
         """Configure basic window properties."""
-        self.setWindowTitle("ASSELA")
+        self.setWindowTitle("ARMSSella")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
         screen = QApplication.primaryScreen()

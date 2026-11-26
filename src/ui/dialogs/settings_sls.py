@@ -151,7 +151,7 @@ def run_headcrab(dialog, callback=None) -> None:
     if is_arm64():
         os_label = get_platform_label()
         extra_note = (
-            " On DroidDeck (unrooted Android userland), ASSella works out of the box in Standalone Mode."
+            " On DroidDeck (unrooted Android userland), ARMSSella works out of the box in Standalone Mode."
             if is_droiddeck()
             else " On immutable Fedora bootc (Armada OS), host package changes may also fail."
         )
@@ -240,7 +240,7 @@ def create_sls_tab(dialog) -> QWidget:
             )
             arm_badge = QLabel(
                 f"<b>{os_name} (ARM64)</b>: SLSsteam arm64 build not detected in ~/.local/share/SLSsteam/. "
-                f"ASSella is running in <b>Standalone Mode</b> (Direct Depot Downloads & Local Manifests).{dd_hint}"
+                f"ARMSSella is running in <b>Standalone Mode</b> (Direct Depot Downloads & Local Manifests).{dd_hint}"
             )
             arm_badge.setStyleSheet(
                 "background-color: rgba(64, 150, 255, 0.15); border: 1px solid rgba(64, 150, 255, 0.4); "

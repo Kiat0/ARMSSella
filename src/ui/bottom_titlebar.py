@@ -159,7 +159,7 @@ class BottomTitleBar(QFrame):
                         break
         if not pixmap.isNull():
             self.logo_label.setPixmap(pixmap)
-        self.logo_label.setToolTip("ASSella")
+        self.logo_label.setToolTip("ARMSSella")
         layout.addWidget(self.logo_label, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addSpacing(6)
 

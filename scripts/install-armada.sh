@@ -15,7 +15,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BOLD}${BLUE}=== ASSella ARM64 / Armada OS Installer ===${NC}"
+echo -e "${BOLD}${BLUE}=== ARMSSella ARM64 / Armada OS Installer ===${NC}"
 
 # Parse command line flags
 FORCE=0
@@ -56,7 +56,7 @@ fi
 echo -e "${GREEN}✓ Core tools (python3, curl, git) present.${NC}"
 
 # 3. User Directories Setup
-INSTALL_DIR="${HOME}/.local/share/ASSella"
+INSTALL_DIR="${HOME}/.local/share/ARMSSella"
 BIN_DIR="${HOME}/.local/bin"
 DOTNET_DIR="${HOME}/.dotnet"
 APP_DIR="${HOME}/.local/share/applications"
@@ -79,10 +79,10 @@ else
     echo -e "${GREEN}✓ .NET 9 runtime (ARM64) installed successfully.${NC}"
 fi
 
-# 5. Clone / Sync ASSella Source Repository (arm64 branch)
-echo -e "\n${BLUE}[3/5] Setting up ASSella (ARM64 / Armada OS)...${NC}"
-REPO_URL="${ARMSSELLA_REPO_URL:-https://github.com/niwia/ASSella.git}"
-BRANCH="${ARMSSELLA_BRANCH:-arm64}"
+# 5. Clone / Sync ARMSSella Source Repository (arm64 / armada-main branch)
+echo -e "\n${BLUE}[3/5] Setting up ARMSSella (ARM64 / Armada OS)...${NC}"
+REPO_URL="${ARMSSELLA_REPO_URL:-https://github.com/Kiat0/ARMSSella.git}"
+BRANCH="${ARMSSELLA_BRANCH:-armada-main}"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "Updating existing installation in $INSTALL_DIR..."
@@ -142,53 +142,54 @@ echo -e "\n${BLUE}[5/5] Creating launcher, desktop shortcut and icons...${NC}"
 
 # Install Icons to standard user icon theme paths
 if [[ -f "$INSTALL_DIR/src/res/logo/icon.svg" ]]; then
-    cp -f "$INSTALL_DIR/src/res/logo/icon.svg" "$ICON_DIR_SVG/assella.svg"
+    cp -f "$INSTALL_DIR/src/res/logo/icon.svg" "$ICON_DIR_SVG/armssella.svg"
 fi
 if [[ -f "$INSTALL_DIR/src/res/logo/icon.png" ]]; then
-    cp -f "$INSTALL_DIR/src/res/logo/icon.png" "$ICON_DIR_PNG/assella.png"
+    cp -f "$INSTALL_DIR/src/res/logo/icon.png" "$ICON_DIR_PNG/armssella.png"
 fi
 
 # Launcher Script
-LAUNCHER="$BIN_DIR/assella"
+LAUNCHER="$BIN_DIR/armssella"
 cat << 'EOF' > "$LAUNCHER"
 #!/usr/bin/env bash
-# ASSella ARM64 / Armada OS Launcher
+# ARMSSella ARM64 / Armada OS Launcher
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
 export QTWEBENGINE_DISABLE_SANDBOX=1
 unset LD_AUDIT
 export DOTNET_ROOT="${HOME}/.dotnet"
 export PATH="${HOME}/.dotnet:${HOME}/.local/bin:${PATH}"
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
-INSTALL_DIR="${HOME}/.local/share/ASSella"
+INSTALL_DIR="${HOME}/.local/share/ARMSSella"
 
 cd "$INSTALL_DIR" || exit 1
 exec "$INSTALL_DIR/.venv/bin/python3" "$INSTALL_DIR/src/main.py" "$@"
 EOF
 chmod +x "$LAUNCHER"
+ln -sf "$LAUNCHER" "$BIN_DIR/assella"
 
 # Desktop Entry
 ICON_PATH="$INSTALL_DIR/src/res/logo/icon.png"
-DESKTOP_FILE="$APP_DIR/assella.desktop"
+DESKTOP_FILE="$APP_DIR/armssella.desktop"
 
-desktop_tmp=$(mktemp "${APP_DIR}/.assella.desktop.tmp.XXXXXX")
+desktop_tmp=$(mktemp "${APP_DIR}/.armssella.desktop.tmp.XXXXXX")
 cat << EOF > "$desktop_tmp"
 [Desktop Entry]
-Name=ASSella
+Name=ARMSSella
 GenericName=Game Depot Downloader
-Comment=Steam Game & Depot Management Suite (ARM64)
+Comment=Steam Game & Depot Management Suite (ARM64 — Armada OS)
 Exec=$LAUNCHER
-Icon=assella
+Icon=armssella
 Terminal=false
 Type=Application
 Categories=Utility;Game;
 StartupNotify=true
-StartupWMClass=ASSella
+StartupWMClass=ARMSSella
 EOF
 chmod 0644 "$desktop_tmp"
 rm -f "$DESKTOP_FILE"
 mv -f "$desktop_tmp" "$DESKTOP_FILE"
 
-echo -e "${GREEN}✓ Created launcher: $LAUNCHER${NC}"
+echo -e "${GREEN}✓ Created launcher: $LAUNCHER (alias: $BIN_DIR/assella)${NC}"
 echo -e "${GREEN}✓ Created desktop entry: $DESKTOP_FILE${NC}"
 
 # Add ~/.local/bin to PATH in bashrc if not present
@@ -199,11 +200,11 @@ if ! echo "$PATH" | grep -q "$BIN_DIR"; then
 fi
 
 echo -e "\n${BOLD}${GREEN}=== Installation Complete! ===${NC}"
-echo -e "You can now launch ASSella using:"
-echo -e "  • ${BOLD}Application Launcher${NC}: Click ASSella under Games / Utilities"
-echo -e "  • ${BOLD}Terminal${NC}: Run '${BOLD}assella${NC}'"
+echo -e "You can now launch ARMSSella using:"
+echo -e "  • ${BOLD}Application Launcher${NC}: Click ARMSSella under Games / Utilities"
+echo -e "  • ${BOLD}Terminal${NC}: Run '${BOLD}armssella${NC}'"
 echo -e "  • ${BOLD}Steam Game Mode (Armada OS / Gamescope)${NC}:"
 echo -e "    1. Switch to Desktop Mode in Armada OS"
 echo -e "    2. In Steam: Games -> 'Add a Non-Steam Game to My Library...'"
-echo -e "    3. Select ASSella from the list and click 'Add Selected Programs'"
-echo -e "    4. Return to Gaming Mode — ASSella is now accessible with controller support!"
+echo -e "    3. Select ARMSSella from the list and click 'Add Selected Programs'"
+echo -e "    4. Return to Gaming Mode — ARMSSella is now accessible with controller support!"
