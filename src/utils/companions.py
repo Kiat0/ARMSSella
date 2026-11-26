@@ -101,6 +101,14 @@ def _run(args: list, timeout: float = 8.0) -> subprocess.CompletedProcess:
 
 
 def have_systemd_user() -> bool:
+    if not in_flatpak() and shutil.which("systemctl") is None:
+        return False
+    try:
+        from utils.helpers import is_droiddeck
+        if is_droiddeck():
+            return False
+    except Exception as _dd_err:
+        logger.debug("[companions] have_systemd_user DroidDeck check: %s", _dd_err)
     try:
         r = _run(["systemctl", "--user", "--version"], timeout=4)
         return r.returncode == 0

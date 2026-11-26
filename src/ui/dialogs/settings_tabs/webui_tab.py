@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -138,7 +139,18 @@ def check_port_availability(dialog) -> None:
         )
 
 
+def _has_systemd_user() -> bool:
+    if sys.platform != "linux":
+        return False
+    from utils.helpers import is_droiddeck
+    if is_droiddeck():
+        return False
+    return shutil.which("systemctl") is not None
+
+
 def get_service_status() -> str:
+    if not _has_systemd_user():
+        return "unavailable"
     try:
         service_path = os.path.expanduser("~/.config/systemd/user/assella-testing.service")
         if not os.path.exists(service_path):
@@ -161,6 +173,8 @@ def get_service_status() -> str:
 
 
 def is_service_enabled() -> bool:
+    if not _has_systemd_user():
+        return False
     try:
         res = subprocess.run(
             ["systemctl", "--user", "is-enabled", "assella-testing.service"],
@@ -188,6 +202,10 @@ def update_service_status(dialog) -> None:
         dialog.service_status_label.setText("Background Service: <font color='#cc4444'>Inactive (Stopped)</font>")
         dialog.start_service_btn.setEnabled(True)
         dialog.stop_service_btn.setEnabled(False)
+    elif status == "unavailable":
+        dialog.service_status_label.setText("Background Service: <font color='#888888'>Unavailable (no systemd)</font>")
+        dialog.start_service_btn.setEnabled(False)
+        dialog.stop_service_btn.setEnabled(False)
     elif status == "not_installed":
         dialog.service_status_label.setText("Background Service: <font color='#888888'>Not Configured / Installed</font>")
         dialog.start_service_btn.setEnabled(False)
@@ -197,7 +215,7 @@ def update_service_status(dialog) -> None:
         dialog.start_service_btn.setEnabled(False)
         dialog.stop_service_btn.setEnabled(False)
 
-    if status != "not_installed":
+    if status not in ("not_installed", "unavailable"):
         dialog.enable_boot_btn.setEnabled(not enabled)
         dialog.disable_boot_btn.setEnabled(enabled)
         boot_text = "Enabled" if enabled else "Disabled"

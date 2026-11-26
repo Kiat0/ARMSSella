@@ -69,6 +69,25 @@ _steam_env_cache: Optional[SteamEnv] = None
 _steam_env_lock = threading.Lock()
 
 
+def _discover_droiddeck_libraries() -> List[Path]:
+    """Return existing DroidDeck external Steam library roots (SD card & extra mounts)."""
+    libs: List[Path] = []
+    use_x64 = os.environ.get("DD_STEAM_CLIENT_ARCH", "").strip().lower() == "x86_64"
+    sd_root = Path("/mnt/droiddeck-sd/x86-64") if use_x64 else Path("/mnt/droiddeck-sd")
+    if (sd_root / "steamapps").is_dir():
+        libs.append(sd_root)
+    extra_base = Path("/mnt/droiddeck-lib")
+    try:
+        if extra_base.is_dir():
+            for child in sorted(extra_base.iterdir()):
+                cand = (child / "x86-64") if use_x64 else child
+                if (cand / "steamapps").is_dir():
+                    libs.append(cand)
+    except OSError as _dd_err:
+        logger.debug(f"[SteamEnv] Could not scan /mnt/droiddeck-lib: {_dd_err}")
+    return libs
+
+
 def _build_steam_env() -> SteamEnv:
     """Internal: detect Steam type and resolve all paths.
 
@@ -115,18 +134,35 @@ def _build_steam_env() -> SteamEnv:
 
     else:
         # ── Native paths ───────────────────────────────────────────────────
-        # Steam root: prefer ~/.local/share/Steam, fall back to ~/.steam/steam symlink or native ARM steamrtarm64
-        native_candidates = [
+        # Respect STEAM_ROOT (Armada OS launch-steam), XDG_DATA_HOME/Steam,
+        # and DroidDeck's optional x86-64 FEX client home (~/.droiddeck-x64).
+        native_candidates: List[Path] = []
+        env_steam_root = os.environ.get("STEAM_ROOT", "").strip()
+        if env_steam_root:
+            native_candidates.append(Path(env_steam_root))
+
+        dd_x64_home = Path(os.environ.get("DD_X64_HOME", "") or (home / ".droiddeck-x64"))
+        dd_x64_steam = dd_x64_home / ".local" / "share" / "Steam"
+        if os.environ.get("DD_STEAM_CLIENT_ARCH", "").strip().lower() == "x86_64":
+            native_candidates.append(dd_x64_steam)
+
+        xdg_data = os.environ.get("XDG_DATA_HOME", "").strip()
+        if xdg_data and Path(xdg_data).is_absolute():
+            native_candidates.append(Path(xdg_data) / "Steam")
+
+        native_candidates.extend([
             home / ".local" / "share" / "Steam",
             home / ".steam" / "steam",
             home / ".local" / "share" / "Steam" / "steamrtarm64",
             home / ".steam" / "steam" / "steamrtarm64",
-        ]
+            dd_x64_steam,
+        ])
         steam_path = None
         for candidate in native_candidates:
             if (
                 (candidate / "steamapps").is_dir()
                 or (candidate / "steamrtarm64").is_dir()
+                or (candidate / "steamrt64").is_dir()
                 or (candidate / "steam").is_file()
             ):
                 steam_path = str(candidate.resolve())
@@ -148,12 +184,21 @@ def _build_steam_env() -> SteamEnv:
         if steam_path:
             steamapps_paths.append(Path(steam_path) / "steamapps")
 
+        # DroidDeck mounted SD card & extra external libraries
+        for dd_lib_root in _discover_droiddeck_libraries():
+            sa = dd_lib_root / "steamapps"
+            if sa.is_dir() and sa not in steamapps_paths:
+                steamapps_paths.append(sa)
+
         # loginusers.vdf
         loginusers_candidates = [
             home / ".local" / "share" / "Steam" / "config" / "loginusers.vdf",
             home / ".steam" / "steam" / "config" / "loginusers.vdf",
             home / ".steam" / "root" / "config" / "loginusers.vdf",
+            dd_x64_steam / "config" / "loginusers.vdf",
         ]
+        if steam_path:
+            loginusers_candidates.insert(0, Path(steam_path) / "config" / "loginusers.vdf")
         loginusers_path = next(
             (p for p in loginusers_candidates if p.exists()), None
         )
@@ -266,6 +311,13 @@ def get_installed_steam_client_version(force_refresh: bool = False) -> Optional[
     ])
 
     manifest_candidates = [
+        "steam_client_steamdeck_stable_linuxarm64.manifest",
+        "steam_client_steamdeck_publicbeta_linuxarm64.manifest",
+        "steam_client_publicbeta_linuxarm64.manifest",
+        "steam_client_linuxarm64.manifest",
+        "steam_client_steamdeck_publicbeta_steamrt64.manifest",
+        "steam_client_publicbeta_steamrt64.manifest",
+        "steam_client_steamrt64.manifest",
         "steam_client_steamdeck_stable_ubuntu12.manifest",
         "steam_client_steamdeck_publicbeta_ubuntu12.manifest",
         "steam_client_ubuntu12.manifest",
@@ -294,8 +346,16 @@ def get_installed_steam_client_version(force_refresh: bool = False) -> Optional[
         if not pkg_dir.is_dir():
             continue
 
-        for manifest_name in manifest_candidates:
-            manifest_file = pkg_dir / manifest_name
+        files_to_try = [pkg_dir / m for m in manifest_candidates]
+        try:
+            for pattern in ("steam_client_*_linuxarm64.manifest", "steam_client_*_steamrt64.manifest"):
+                for extra in sorted(pkg_dir.glob(pattern)):
+                    if extra not in files_to_try:
+                        files_to_try.append(extra)
+        except OSError as _glob_err:
+            logger.debug(f"[SteamHelpers] Could not glob ARM64 manifests in {pkg_dir}: {_glob_err}")
+
+        for manifest_file in files_to_try:
             if manifest_file.is_file():
                 try:
                     content = manifest_file.read_text(encoding="utf-8", errors="replace")
@@ -350,19 +410,37 @@ def _find_steam_windows():
 
 def _find_steam_linux():
     home_dir = os.path.expanduser("~")
-    potential_paths = [
+    potential_paths = []
+
+    env_steam_root = os.environ.get("STEAM_ROOT", "").strip()
+    if env_steam_root:
+        potential_paths.append(env_steam_root)
+
+    dd_x64_home = os.environ.get("DD_X64_HOME", "").strip() or os.path.join(home_dir, ".droiddeck-x64")
+    dd_x64_steam = os.path.join(dd_x64_home, ".local", "share", "Steam")
+    if os.environ.get("DD_STEAM_CLIENT_ARCH", "").strip().lower() == "x86_64":
+        potential_paths.append(dd_x64_steam)
+
+    xdg_data = os.environ.get("XDG_DATA_HOME", "").strip()
+    if xdg_data and os.path.isabs(xdg_data):
+        potential_paths.append(os.path.join(xdg_data, "Steam"))
+
+    potential_paths.extend([
         os.path.join(home_dir, ".local", "share", "Steam"),
         os.path.join(home_dir, ".steam", "steam"),
         os.path.join(
             home_dir, ".var", "app", "com.valvesoftware.Steam", "data", "Steam"
         ),
-    ]
+        dd_x64_steam,
+    ])
 
     for path in potential_paths:
-        # Standard Steam has steamapps/; native ARM64 Steam installs to steamrtarm64/
+        # Standard Steam has steamapps/; native ARM64 Steam installs to steamrtarm64/,
+        # and DroidDeck x64 FEX Steam installs to steamrt64/.
         if (
             os.path.isdir(os.path.join(path, "steamapps"))
             or os.path.isdir(os.path.join(path, "steamrtarm64"))
+            or os.path.isdir(os.path.join(path, "steamrt64"))
         ):
             real_path = os.path.realpath(path)
             arm_bin = os.path.join(path, "steamrtarm64", "steam")
@@ -461,6 +539,8 @@ def get_steam_libraries():
         additional_libraries = parse_library_folders(vdf_path)
         for lib_path in additional_libraries:
             all_libraries.add(os.path.realpath(lib_path))
+    for dd_lib in _discover_droiddeck_libraries():
+        all_libraries.add(os.path.realpath(str(dd_lib)))
 
     _cached_steam_libraries = list(all_libraries)
     _cached_libraries_vdf_mtime = vdf_mtime
@@ -586,6 +666,8 @@ def dispatch_steam_url(url: str) -> bool:
             cmd = [str(Path(env.steam_path) / "steam"), url]
         elif env.steam_path and (Path(env.steam_path) / "steamrtarm64" / "steam").is_file():
             cmd = [str(Path(env.steam_path) / "steamrtarm64" / "steam"), url]
+        elif env.steam_path and (Path(env.steam_path) / "steamrt64" / "steam").is_file():
+            cmd = [str(Path(env.steam_path) / "steamrt64" / "steam"), url]
         elif shutil.which("xdg-open"):
             cmd = ["xdg-open", url]
 

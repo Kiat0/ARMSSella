@@ -1,4 +1,5 @@
 import logging
+import shutil
 import subprocess
 import sys
 
@@ -113,16 +114,18 @@ class MainWindowWebBridgeMixin:
 
         # 2. Check if the systemd background user service is active (Linux only)
         is_bg_active = False
-        if sys.platform == "linux":
+        if sys.platform == "linux" and shutil.which("systemctl"):
             try:
-                res = subprocess.run(
-                    ["systemctl", "--user", "is-active", "assella-testing.service"],
-                    capture_output=True,
-                    text=True,
-                    timeout=2.0,
-                )
-                if res.stdout.strip() == "active":
-                    is_bg_active = True
+                from utils.helpers import is_droiddeck
+                if not is_droiddeck():
+                    res = subprocess.run(
+                        ["systemctl", "--user", "is-active", "assella-testing.service"],
+                        capture_output=True,
+                        text=True,
+                        timeout=2.0,
+                    )
+                    if res.stdout.strip() == "active":
+                        is_bg_active = True
             except Exception as e:
                 logger.debug(f"[WebBridge] Could not check assella-testing.service status: {e}")
 

@@ -206,14 +206,16 @@ def _update_proc_cache_if_needed():
                     steam_pids.append(pid_dir)
                 elif comm == "steamwebhelper":
                     _proc_cache["steam_running"] = True
-                elif comm == "bwrap":
+                elif comm in ("bwrap", "FEXInterpreter", "FEXLoader"):
                     try:
                         with open(os.path.join("/proc", pid_dir, "cmdline"), "rb") as cf:
                             cdata = cf.read()
                             if b"steam" in cdata or b".steam-wrapped" in cdata:
                                 _proc_cache["steam_running"] = True
+                                if comm in ("FEXInterpreter", "FEXLoader"):
+                                    steam_pids.append(pid_dir)
                     except OSError as e:
-                        logger.debug(f"[sls] bwrap cmdline read: {e}")
+                        logger.debug(f"[sls] {comm} cmdline read: {e}")
             except OSError:
                 continue
 

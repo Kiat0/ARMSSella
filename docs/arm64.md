@@ -14,9 +14,9 @@ Standard x86 SLSsteam binaries or older releases will **not** inject into native
 
 ## Overview
 
-ASSella provides native 64-bit ARM (`aarch64`) builds designed specifically for modern ARM handheld devices running **Armada OS** (a Fedora `bootc` immutable gaming distribution) and other 64-bit ARM Linux environments.
+ASSella provides native 64-bit ARM (`aarch64`) builds designed specifically for modern ARM handheld devices running **Armada OS** (a Fedora `bootc` immutable gaming distribution, including AYN Odin 2/3, Retroid Pocket, and AYANEO Pocket devices) and **DroidDeck** on unrooted Android handhelds (see the dedicated [DroidDeck Guide](./droiddeck.md)).
 
-The ARM64 port delivers the same Material You interface, downloading workflows, and library management features available on x86, while adapting under the hood to the unique requirements of ARM handheld hardware and immutable system architectures.
+The ARM64 port delivers the same Material You interface, downloading workflows, and library management features available on x86, while adapting under the hood to the unique requirements of ARM handheld hardware, FEX translation, and immutable system architectures.
 
 ---
 
@@ -42,10 +42,13 @@ ARM64 handheld screens frequently use 720p or 800p displays paired with 125%–1
 - The window geometry dynamically detects available screen bounds and clamps dimensions to fit the display.
 - Action bars, sidebars, and dialog buttons remain accessible without clipping offscreen.
 
-### 5. Native ARM64 Steam Detection
+### 5. Native ARM64 Steam & FEX Detection
 Steam on ARM64 Linux resides in dedicated ARM runtime directories:
-- ASSella automatically resolves and hooks native ARM Steam at `~/.local/share/Steam/steamrtarm64`.
-- Manifest discovery and client version probing natively inspect ARM64 manifest structures.
+- ASSella automatically resolves and hooks native ARM Steam at `~/.local/share/Steam/steamrtarm64` (respecting `STEAM_ROOT` and `XDG_DATA_HOME`).
+- Manifest discovery inspects real Armada OS `steam_client_*_linuxarm64.manifest` files alongside standard manifests.
+- Architecture-safe self-updating ensures ARM64 installs only accept ARM64 AppImage releases and never overwrite themselves with x86_64 binaries.
+- `LD_AUDIT` is sanitized from `AppRun`, launchers, and `.NET 9` subprocesses so SLSsteam hooks are never accidentally injected into Python/Qt or DepotDownloader when launched from Gamescope Game Mode.
+- Any x86_64 helper ELF binaries (such as `schema-grabber`) are automatically wrapped with `FEXInterpreter` (Armada OS) or `droiddeck-fex` (DroidDeck) when available.
 
 ---
 

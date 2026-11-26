@@ -143,17 +143,34 @@ def run_headcrab_and_quit(dialog) -> bool:
 
 def run_headcrab(dialog, callback=None) -> None:
     """Prompt and run Headcrab installation script inside a terminal, quitting ASSella upon launch."""
+    from utils.helpers import is_arm64, is_droiddeck, get_platform_label
+
     already = is_headcrab_installed()
     verb = "re-run" if already else "install"
+    arm_warning = ""
+    if is_arm64():
+        os_label = get_platform_label()
+        extra_note = (
+            " On DroidDeck (unrooted Android userland), ASSella works out of the box in Standalone Mode."
+            if is_droiddeck()
+            else " On immutable Fedora bootc (Armada OS), host package changes may also fail."
+        )
+        arm_warning = (
+            f"\n\nWARNING ({os_label}): Standard Headcrab installs x86/i386 SLSsteam binaries, "
+            "which do not inject into native ARM64 Steam (steamrtarm64)."
+            f"{extra_note}\n"
+            "For native ARM64 Steam, install an SLSsteam aarm64 preview into ~/.local/share/SLSsteam/SLSsteam.so."
+        )
     reply = ThemedMessageBox.question(
         dialog,
         "Run Headcrab",
         f"This will {verb} Headcrab via:\n"
         "  curl -fsSL headcrab.pages.dev | bash\n\n"
-        "A terminal window will open and ASSella will close so Headcrab can safely update SLSsteam without file conflicts.\n\n"
+        "A terminal window will open and ASSella will close so Headcrab can safely update SLSsteam without file conflicts."
+        f"{arm_warning}\n\n"
         "Proceed?",
         ThemedMessageBox.StandardButton.Yes | ThemedMessageBox.StandardButton.No,
-        ThemedMessageBox.StandardButton.Yes,
+        ThemedMessageBox.StandardButton.No if is_arm64() else ThemedMessageBox.StandardButton.Yes,
     )
     if reply != ThemedMessageBox.StandardButton.Yes:
         return
@@ -201,10 +218,10 @@ def create_sls_tab(dialog) -> QWidget:
     # 1. Integration Card
     int_card, int_layout = dialog._create_card_frame("SLS Settings")
 
-    from utils.helpers import is_arm64, is_armada_os
+    from utils.helpers import is_arm64, is_droiddeck, get_platform_label
     from core.steam_helpers import get_steam_env
     if is_arm64():
-        os_name = "Armada OS" if is_armada_os() else "ARM64 Linux"
+        os_name = get_platform_label()
         sls_present = get_steam_env().sls_installed()
         if sls_present:
             arm_badge = QLabel(
@@ -216,9 +233,14 @@ def create_sls_tab(dialog) -> QWidget:
                 "border-radius: 6px; padding: 8px; color: #E0E0E0; font-size: 8.5pt;"
             )
         else:
+            dd_hint = (
+                " DroidDeck Android/.NET compatibility flags and FUSE-free execution are active."
+                if is_droiddeck()
+                else ""
+            )
             arm_badge = QLabel(
                 f"<b>{os_name} (ARM64)</b>: SLSsteam arm64 build not detected in ~/.local/share/SLSsteam/. "
-                "ASSella is running in <b>Standalone Mode</b> (Direct Depot Downloads & Local Manifests)."
+                f"ASSella is running in <b>Standalone Mode</b> (Direct Depot Downloads & Local Manifests).{dd_hint}"
             )
             arm_badge.setStyleSheet(
                 "background-color: rgba(64, 150, 255, 0.15); border: 1px solid rgba(64, 150, 255, 0.4); "

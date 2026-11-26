@@ -86,13 +86,24 @@ HERE="$(dirname "$(readlink -f "$0")")"
 cd "$HERE/bin"
 
 # 1. Wayland & Gamescope compatibility (prefer Wayland in Game Mode, fallback to XCB in Desktop Mode)
-export QT_QPA_PLATFORM="wayland;xcb"
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
 
 # 2. QtWebEngine / Chromium sandbox guard for FUSE mounts
 export QTWEBENGINE_DISABLE_SANDBOX=1
 
-# 3. Prioritise bundled self-contained .NET 9 ARM64 runtime
+# 3. Prevent Steam/SLSsteam LD_AUDIT hooks from being inherited into Python/Qt/.NET
+unset LD_AUDIT
+
+# 4. Prioritise bundled self-contained .NET 9 ARM64 runtime
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+if [ -n "${DD_DESKTOP:-}${DD_LAUNCH_DIR:-}${DD_INSIDE:-}${DDNATV_ROOT:-}${DD_STEAM_CLIENT_ARCH:-}" ] || [ -x /usr/local/bin/droiddeck-session ]; then
+    export DOTNET_EnableWriteXorExecute="${DOTNET_EnableWriteXorExecute:-0}"
+    export COMPlus_EnableWriteXorExecute="${COMPlus_EnableWriteXorExecute:-0}"
+    export DOTNET_gcServer="${DOTNET_gcServer:-0}"
+    export DOTNET_EnableDiagnostics="${DOTNET_EnableDiagnostics:-0}"
+fi
 if [ -d "$HERE/bin/.dotnet" ]; then
     export DOTNET_ROOT="$HERE/bin/.dotnet"
     export PATH="$HERE/bin/.dotnet:${PATH}"
@@ -101,7 +112,8 @@ elif [ -d "${HOME}/.dotnet" ]; then
     export PATH="${HOME}/.dotnet:${PATH}"
 fi
 
-export APPIMAGE=1
+# Preserve real $APPIMAGE path set by the AppImage runtime for self-updates
+export APPIMAGE="${APPIMAGE:-1}"
 exec "./run.sh" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
@@ -109,8 +121,18 @@ chmod +x "$APPDIR/AppRun"
 cat << 'EOF' > "$APPDIR/bin/run.sh"
 #!/usr/bin/env bash
 cd "$(dirname "$(realpath "$0")")"
-export APPIMAGE=1
+export APPIMAGE="${APPIMAGE:-1}"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_CLI_TELEMETRY_OPTOUT=1
+export DOTNET_NOLOGO=1
+if [ -n "${DD_DESKTOP:-}${DD_LAUNCH_DIR:-}${DD_INSIDE:-}${DDNATV_ROOT:-}${DD_STEAM_CLIENT_ARCH:-}" ] || [ -x /usr/local/bin/droiddeck-session ]; then
+    export DOTNET_EnableWriteXorExecute="${DOTNET_EnableWriteXorExecute:-0}"
+    export COMPlus_EnableWriteXorExecute="${COMPlus_EnableWriteXorExecute:-0}"
+    export DOTNET_gcServer="${DOTNET_gcServer:-0}"
+    export DOTNET_EnableDiagnostics="${DOTNET_EnableDiagnostics:-0}"
+fi
+unset LD_AUDIT
 
 PYTHON_EXEC=".venv/bin/python3"
 if [ -f "$PYTHON_EXEC" ]; then
@@ -150,10 +172,10 @@ echo -e "${GREEN}✓ Bundled .NET 9 ARM64 runtime.${NC}"
 # 6. Fetch Native ARM64 Binaries (wireproxy & appimageupdatetool)
 echo -e "\n${BLUE}[5/7] Bundling native ARM64 support binaries...${NC}"
 
-# ARM64 wireproxy for Kuroko stealth proxy
+# ARM64 wireproxy for Kuroko stealth proxy (matches src/utils/kuroko/binary.py)
 echo "Downloading native ARM64 wireproxy..."
 WP_TMP=$(mktemp -d)
-if curl -fsSL --retry 3 "https://github.com/windtf/wireproxy/releases/download/v0.3.2/wireproxy_linux_arm64.tar.gz" -o "$WP_TMP/wireproxy.tar.gz" 2>/dev/null; then
+if curl -fsSL --retry 3 "https://github.com/windtf/wireproxy/releases/download/v1.1.3/wireproxy_linux_arm64.tar.gz" -o "$WP_TMP/wireproxy.tar.gz" 2>/dev/null; then
     tar -xzf "$WP_TMP/wireproxy.tar.gz" -C "$WP_TMP" 2>/dev/null || true
     if [[ -f "$WP_TMP/wireproxy" ]]; then
         cp -f "$WP_TMP/wireproxy" "$APPDIR/bin/src/deps/wireproxy"
@@ -243,6 +265,16 @@ if [[ "$HOST_ARCH" == "aarch64" || "$HOST_ARCH" == "arm64" ]]; then
     # Strip unneeded debug symbols from native wheels
     find "$SITE_PKGS" -name "*.so*" -exec strip --strip-unneeded {} + 2>/dev/null || true
 
+    echo "Verifying Qt6 platform plugins (Wayland + XCB)..."
+    if [ -d "$QT6_DIR/plugins/platforms" ]; then
+        ls -la "$QT6_DIR/plugins/platforms"
+        for required_plug in libqwayland-egl.so libqxcb.so; do
+            if [ ! -f "$QT6_DIR/plugins/platforms/$required_plug" ]; then
+                echo -e "${YELLOW}Warning: Qt6 platform plugin missing: $required_plug${NC}"
+            fi
+        done
+    fi
+
     echo "Verifying pruned runtime imports..."
     QT_QPA_PLATFORM=offscreen "$APPDIR/bin/.venv/bin/python3" -c "import PyQt6.QtCore, PyQt6.QtWidgets, PyQt6.QtGui, PyQt6.QtNetwork, PyQt6.QtSvg, requests, yaml, cryptography, configobj, rich, vdf, steam, steam.client, zstandard, curl_cffi, capstone; app = PyQt6.QtWidgets.QApplication(['app', '-platform', 'offscreen']); print('✓ Pruned AppDir runtime verified: all critical dependencies imported and QApplication created successfully!')"
 else
@@ -279,7 +311,9 @@ if [ -f "$STATIC_RUNTIME" ]; then
     echo "✓ Using static FUSE3-compatible aarch64 runtime."
 fi
 
-UPDATE_INFO="gh-releases-zsync|niwia|ASSella|latest-pre|ASSella-arm64.AppImage.zsync"
+UPDATE_REPO="${UPDATE_REPO:-${GITHUB_REPOSITORY:-niwia/ASSella}}"
+UPDATE_REPO_PIPE="${UPDATE_REPO/\//|}"
+UPDATE_INFO="gh-releases-zsync|${UPDATE_REPO_PIPE}|latest-pre|ASSella-arm64.AppImage.zsync"
 ARCH=aarch64 "$APPIMAGETOOL" -n -u "$UPDATE_INFO" \
   --mksquashfs-opt -b --mksquashfs-opt 524288 \
   --mksquashfs-opt -Xcompression-level --mksquashfs-opt 19 \
@@ -287,8 +321,16 @@ ARCH=aarch64 "$APPIMAGETOOL" -n -u "$UPDATE_INFO" \
 
 sha256sum "$OUTPUT_APPIMAGE" > "${OUTPUT_APPIMAGE}.sha256"
 
+# 9. Also package FUSE-free portable tarball for DroidDeck / unrooted Android userlands
+OUTPUT_PORTABLE="$SCRIPT_DIR/ASSella-arm64-portable.tar.gz"
+echo -e "\n${BLUE}[Bonus] Packaging FUSE-free portable tarball for DroidDeck...${NC}"
+tar -czf "$OUTPUT_PORTABLE" -C "$BUILD_DIR" AppDir
+sha256sum "$OUTPUT_PORTABLE" > "${OUTPUT_PORTABLE}.sha256"
+
 echo -e "\n${BOLD}${GREEN}=== Build Complete! ===${NC}"
-echo -e "AppImage: ${BOLD}$OUTPUT_APPIMAGE${NC}"
-echo -e "Checksum: ${BOLD}${OUTPUT_APPIMAGE}.sha256${NC}"
+echo -e "AppImage : ${BOLD}$OUTPUT_APPIMAGE${NC}"
+echo -e "Checksum : ${BOLD}${OUTPUT_APPIMAGE}.sha256${NC}"
+echo -e "Portable : ${BOLD}$OUTPUT_PORTABLE${NC} (FUSE-free for DroidDeck / proot / DDNATV_ROOT)"
+echo -e "Checksum : ${BOLD}${OUTPUT_PORTABLE}.sha256${NC}"
 echo -e "\n${BOLD}Smoke-testing on Armada OS / Fedora bootc container:${NC}"
 echo "  podman run --rm -v \$(pwd):/app -w /app --platform linux/arm64 fedora:41 bash -c \"APPIMAGE_EXTRACT_AND_RUN=1 ./ASSella-arm64.AppImage --headless --check-updates\""

@@ -1010,9 +1010,20 @@ def _confirm_slssteam_backup(dialog, installer: str = "Headcrab") -> Tuple[bool,
 
 def on_h3adcrab_clicked(dialog) -> None:
     """Prompt user with Headcrab mirror options and execute selected script in terminal."""
+    from utils.helpers import is_arm64, get_platform_label
+
     proceed, backup_note = _confirm_slssteam_backup(dialog, installer="Headcrab")
     if not proceed:
         return
+
+    arm_warning = ""
+    if is_arm64():
+        os_label = get_platform_label()
+        arm_warning = (
+            f"\n\nWARNING ({os_label}): Standard Headcrab installs x86/i386 SLSsteam binaries, "
+            "which will not hook native ARM64 Steam (steamrtarm64) and may fail on immutable Armada OS or DroidDeck. "
+            "Use an SLSsteam aarm64 preview build in ~/.local/share/SLSsteam/SLSsteam.so instead."
+        )
 
     choice = ThemedMessageBox.choices(
         dialog,
@@ -1023,13 +1034,14 @@ def on_h3adcrab_clicked(dialog) -> None:
         "Option 2: Alternative mirror (runn.i.ng / GitHub)\n"
         'curl -fsSL "https://runn.i.ng/Deadboy666/h3adcr-b/refs/heads/main/headcrab.sh" | bash\n\n'
         "A terminal window will open and ASSella will close so Headcrab can safely configure SLSsteam without file conflicts."
+        + arm_warning
         + backup_note,
         [
             ("Option 1 (Cloudflare)", "opt1"),
             ("Option 2 (runn.i.ng)", "opt2"),
             ("Cancel", "cancel"),
         ],
-        default="opt1",
+        default="cancel" if is_arm64() else "opt1",
     )
     if choice == "opt1":
         cmd = ["bash", "-c", "curl -fsSL headcrab.pages.dev | bash; echo; echo '--- Done. Press Enter to close ---'; read _"]

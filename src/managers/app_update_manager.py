@@ -64,9 +64,37 @@ def _is_qt_alive(obj) -> bool:
     return True
 
 
+def _is_arm64_host() -> bool:
+    """Return True when running on ARM64 (or simulated via ASSELLA_FORCE_ARM64=1)."""
+    try:
+        from utils.helpers import is_arm64
+        return is_arm64()
+    except Exception as e:
+        logger.debug(f"[Updater] Falling back to platform.machine() for ARM64 check: {e}")
+        import platform
+        return platform.machine().lower() in ("aarch64", "arm64", "armv8b", "armv8l")
+
+
+def _is_arm64_asset_name(name: str) -> bool:
+    low = (name or "").lower()
+    return "arm64" in low or "aarch64" in low
+
+
 def _resolve_appimage_path() -> str:
     """Resolve the installed AppImage target path, following any symlink."""
-    default_appimage = os.path.expanduser("~/.local/share/ACCELA/ASSella.AppImage")
+    is_arm = _is_arm64_host()
+    default_candidates = (
+        [
+            os.path.expanduser("~/.local/share/ACCELA/ASSella-arm64.AppImage"),
+            os.path.expanduser("~/.local/share/ASSella/ASSella-arm64.AppImage"),
+            os.path.expanduser("~/.local/share/ACCELA/ASSella.AppImage"),
+        ]
+        if is_arm
+        else [
+            os.path.expanduser("~/.local/share/ACCELA/ASSella.AppImage"),
+        ]
+    )
+    default_appimage = default_candidates[0]
     appimage_path = os.environ.get("APPIMAGE", "")
     # AppRun/run.sh export APPIMAGE=1; ignore non-path sentinel values.
     if appimage_path and appimage_path != "1" and os.path.exists(appimage_path):
@@ -74,8 +102,9 @@ def _resolve_appimage_path() -> str:
     argv0 = os.environ.get("ARGV0", "")
     if argv0 and argv0.lower().endswith(".appimage") and os.path.exists(argv0):
         return os.path.realpath(argv0)
-    if os.path.exists(default_appimage):
-        return os.path.realpath(default_appimage)
+    for cand in default_candidates:
+        if os.path.exists(cand):
+            return os.path.realpath(cand)
     return appimage_path or default_appimage
 
 
@@ -107,7 +136,7 @@ def _cleanup_scratch_files(
     keep: Optional[Path] = None,
 ) -> None:
     """Remove temporary delta and download scratch files (including .part)."""
-    prefixes = {base_name, "ASSella.AppImage"}
+    prefixes = {base_name, "ASSella.AppImage", "ASSella-arm64.AppImage"}
     suffixes = (
         ".part",
         ".autoupdate",
@@ -424,7 +453,12 @@ def _tags_match_or_newer(
 
 
 def _extract_release_assets(release_data: Dict[str, Any]) -> Tuple[str, Optional[str], Optional[str]]:
-    """Extract (appimage_url, zsync_url, expected_sha256) from a GitHub/R2 release dict."""
+    """Extract (appimage_url, zsync_url, expected_sha256) from a GitHub/R2 release dict.
+
+    Architecture-aware: on ARM64 hosts, only ARM64/aarch64 AppImage assets are
+    accepted so an x86_64 release can never overwrite an ARM64 installation.
+    """
+    is_arm = _is_arm64_host()
     download_url: Optional[str] = None
     appimage_sha: Optional[str] = None
     appimage_candidates: list[Tuple[str, Optional[str]]] = []
@@ -438,19 +472,28 @@ def _extract_release_assets(release_data: Dict[str, Any]) -> Tuple[str, Optional
         if not name or not url:
             continue
         low = name.lower()
-        if low == "assella.appimage.zsync" or (low.endswith(".appimage.zsync") and not zsync_url):
-            zsync_url = url
+        asset_is_arm = _is_arm64_asset_name(low)
+        if low.endswith(".appimage.zsync"):
+            if is_arm:
+                if asset_is_arm and (low == "assella-arm64.appimage.zsync" or not zsync_url):
+                    zsync_url = url
+            else:
+                if not asset_is_arm and (low == "assella.appimage.zsync" or not zsync_url):
+                    zsync_url = url
             continue
         if low.endswith(".zsync") or low.endswith(".sha256"):
             continue
         if low.endswith(".appimage"):
+            if is_arm != asset_is_arm:
+                continue
             raw_sha = str(asset.get("sha256") or "").strip().lower()
             if not raw_sha:
                 raw_digest = str(asset.get("digest") or "").strip().lower()
                 if raw_digest.startswith("sha256:"):
                     raw_sha = raw_digest[len("sha256:"):].strip()
             sha = raw_sha if re.fullmatch(r"[0-9a-f]{64}", raw_sha) else None
-            if name == "ASSella.AppImage":
+            preferred_name = "ASSella-arm64.AppImage" if is_arm else "ASSella.AppImage"
+            if name == preferred_name:
                 download_url = url
                 appimage_sha = sha
                 continue
@@ -460,6 +503,8 @@ def _extract_release_assets(release_data: Dict[str, Any]) -> Tuple[str, Optional
         download_url, appimage_sha = appimage_candidates[0]
 
     if not download_url:
+        if is_arm:
+            raise RuntimeError("No ARM64 AppImage asset found in the release.")
         raise RuntimeError("No AppImage asset found in the release.")
 
     if not zsync_url:
@@ -472,8 +517,10 @@ def _resolve_sha256_sidecar(release_data: Dict[str, Any], download_url: str) -> 
     """Return ``(sidecar_url, advertised)`` for the selected release AppImage asset."""
     if not download_url:
         return None, False
+    is_arm = _is_arm64_host()
+    default_sidecar = "assella-arm64.appimage.sha256" if is_arm else "assella.appimage.sha256"
     dl_basename = download_url.rstrip("/").rsplit("/", 1)[-1].lower()
-    preferred = f"{dl_basename}.sha256" if dl_basename else "assella.appimage.sha256"
+    preferred = f"{dl_basename}.sha256" if dl_basename else default_sidecar
     fallback_sha_url: Optional[str] = None
     for asset in release_data.get("assets", []):
         if not isinstance(asset, dict):
@@ -484,7 +531,7 @@ def _resolve_sha256_sidecar(release_data: Dict[str, Any], download_url: str) -> 
             continue
         if name == preferred:
             return url, True
-        if name == "assella.appimage.sha256" and fallback_sha_url is None:
+        if name == default_sidecar and fallback_sha_url is None:
             fallback_sha_url = url
     if fallback_sha_url:
         return fallback_sha_url, True
@@ -868,11 +915,17 @@ class AppUpdateManager(QObject):
                             _invoke_progress("setLabelText", Q_ARG(str, "Delta update via AppImageUpdate..."))
                         target = dest_dir / f"{appimage_name}.autoupdate"
                         shutil.copy2(appimage_path, target)
+                        zsync_asset = (
+                            "ASSella-arm64.AppImage.zsync"
+                            if _is_arm64_host()
+                            else "ASSella.AppImage.zsync"
+                        )
+                        update_repo = os.environ.get("ASSELLA_UPDATE_REPO", "niwia|ASSella").replace("/", "|")
                         cmd = [
                             updater,
                             "-O",
                             "-u",
-                            f"gh-releases-zsync|niwia|ASSella|{target_tag}|ASSella.AppImage.zsync",
+                            f"gh-releases-zsync|{update_repo}|{target_tag}|{zsync_asset}",
                             str(target),
                         ]
                         rc, was_cancelled = _run_delta_subprocess(

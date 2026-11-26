@@ -665,14 +665,15 @@ class SteamlessIntegration(QObject):
                         creationflags=creationflags,
                     )
                 else:
-                    # Linux: run with dotnet
-                    # Set DOTNET_ROOT if using ~/.dotnet
-                    env = None
-                    if self.dotnet_path and self.dotnet_path.startswith(
-                        os.path.expanduser("~")
-                    ):
-                        env = os.environ.copy()
-                        env["DOTNET_ROOT"] = os.path.expanduser("~/.dotnet")
+                    # Linux: always use sanitized .NET environment (bundled .dotnet,
+                    # LD_AUDIT/LD_PRELOAD cleanup, and DroidDeck/Android W^X flags).
+                    from utils.helpers import get_dotnet_env
+
+                    env = get_dotnet_env()
+                    if self.dotnet_path:
+                        dotnet_dir = os.path.dirname(os.path.realpath(self.dotnet_path))
+                        if os.path.isdir(dotnet_dir):
+                            env.setdefault("DOTNET_ROOT", dotnet_dir)
 
                     process = subprocess.Popen(
                         cmd,

@@ -13,6 +13,7 @@ from utils.helpers import (
     get_schema_grabber_path,
     get_steam_stats_dir,
     get_dotnet_env,
+    wrap_command_for_arm64,
 )
 from utils.paths import Paths
 
@@ -45,11 +46,14 @@ def _schema_grabber_supports_env() -> bool:
         if grabber.exists():
             cwd = get_slscheevo_save_path() / "data" / "bins"
             cwd.mkdir(parents=True, exist_ok=True)
-            probe_env = dict(os.environ)
+            probe_env = get_dotnet_env()
             probe_env[SCHEMA_GRABBER_USER_ENV] = _ENV_PROBE_MARKER
             probe_env[SCHEMA_GRABBER_PASS_ENV] = _ENV_PROBE_MARKER
+            probe_cmd = wrap_command_for_arm64(
+                [str(grabber), _ENV_PROBE_MARKER, _ENV_PROBE_MARKER, "0"]
+            )
             proc = subprocess.run(
-                [str(grabber), _ENV_PROBE_MARKER, _ENV_PROBE_MARKER, "0"],
+                probe_cmd,
                 cwd=str(cwd),
                 env=probe_env,
                 capture_output=True,
@@ -217,20 +221,34 @@ class GenerateAchievementsTask(QObject):
 
                 # Resolve dotnet environment settings (cleaning overrides and setting DOTNET_ROOT)
                 env = get_dotnet_env()
+                exec_command = wrap_command_for_arm64(command)
 
-                self.process = subprocess.Popen(
-                    command,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding="utf-8",
-                    cwd=str(cwd),
-                    env={**env, **env_extra} if env_extra else env,
-                    bufsize=1,  # Line buffered
-                    creationflags=(
-                        subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-                    ),
-                )
+                try:
+                    self.process = subprocess.Popen(
+                        exec_command,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        encoding="utf-8",
+                        cwd=str(cwd),
+                        env={**env, **env_extra} if env_extra else env,
+                        bufsize=1,  # Line buffered
+                        creationflags=(
+                            subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                        ),
+                    )
+                except OSError as oe:
+                    import errno as _errno
+                    if oe.errno == _errno.ENOEXEC:
+                        last_error = (
+                            "schema-grabber is an x86_64 binary and cannot run natively on ARM64 "
+                            "without FEX (FEXInterpreter / droiddeck-fex)."
+                        )
+                        logger.error(last_error)
+                        self.progress.emit(last_error)
+                        failed_count += 1
+                        continue
+                    raise
                 self.process_pid = self.process.pid
 
                 # Start a watchdog thread to terminate the process if it hangs (e.g. on 2FA prompts)

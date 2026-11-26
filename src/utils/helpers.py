@@ -93,19 +93,106 @@ def is_armada_os() -> bool:
     if os.environ.get("ASSELLA_FORCE_ARMADA") in ("1", "true", "True"):
         return True
     try:
+        if os.path.exists("/etc/armada-release"):
+            return True
         for p in ("/etc/os-release", "/usr/lib/os-release"):
             if os.path.exists(p):
                 with open(p, "r", encoding="utf-8") as f:
                     content = f.read().lower()
                     if (
                         "id=armada" in content
-                        or 'name="armada"' in content
+                        or "id=armadaos" in content
+                        or 'name="armada' in content
                         or "armada-os" in content
+                        or "armada os" in content
                     ):
                         return True
     except Exception:
         pass
     return False
+
+
+def is_droiddeck() -> bool:
+    """Check if the current host is running inside DroidDeck on Android.
+
+    Checks DroidDeck runtime environment variables (DD_DESKTOP, DD_LAUNCH_DIR,
+    DD_INSIDE, DDNATV_ROOT, DD_STEAM_CLIENT_ARCH, DROIDDECK_PACKAGE) and
+    userland overlay binaries. Can be simulated via ASSELLA_FORCE_DROIDDECK=1.
+    """
+    force = os.environ.get("ASSELLA_FORCE_DROIDDECK")
+    if force in ("1", "true", "True"):
+        return True
+    if force in ("0", "false", "False"):
+        return False
+    for var in (
+        "DD_DESKTOP",
+        "DD_LAUNCH_DIR",
+        "DD_INSIDE",
+        "DDNATV_ROOT",
+        "DD_STEAM_CLIENT_ARCH",
+        "DROIDDECK_PACKAGE",
+    ):
+        if os.environ.get(var):
+            return True
+    for marker in (
+        "/usr/local/bin/droiddeck-session",
+        "/usr/local/bin/droiddeck-appimage-run",
+        "/usr/local/bin/droiddeck-steam-launch",
+    ):
+        if os.path.exists(marker):
+            return True
+    return False
+
+
+def get_platform_label() -> str:
+    """Return a concise human-readable label for the current ARM64/Linux platform."""
+    if is_droiddeck():
+        return "DroidDeck"
+    if is_armada_os():
+        return "Armada OS"
+    if is_arm64():
+        return "ARM64 Linux"
+    return "Linux" if sys.platform == "linux" else sys.platform
+
+
+def get_elf_machine(path: str | Path) -> Optional[int]:
+    """Read the ELF e_machine field (3=i386, 62=x86_64, 183=aarch64), or None."""
+    try:
+        with open(path, "rb") as fh:
+            hdr = fh.read(20)
+        if len(hdr) < 20 or hdr[:4] != b"\x7fELF":
+            return None
+        endian = "big" if hdr[5] == 2 else "little"
+        return int.from_bytes(hdr[18:20], endian)
+    except OSError as e:
+        logger.debug(f"[ELF] Could not read ELF header from {path}: {e}")
+        return None
+
+
+def is_x86_elf(path: str | Path) -> bool:
+    """Return True if ``path`` is an i386 or x86_64 ELF binary."""
+    return get_elf_machine(path) in (3, 62)
+
+
+def wrap_command_for_arm64(cmd: list[str]) -> list[str]:
+    """On ARM64 Linux, wrap an x86/x86_64 ELF executable with FEX if available.
+
+    Prefers DroidDeck's ``droiddeck-fex`` wrapper when present, then
+    ``FEXInterpreter`` (Armada OS / standard ARM64 Linux). Leaves native ARM64
+    binaries, scripts, and non-ARM64 hosts untouched.
+    """
+    if not cmd or not is_arm64() or sys.platform != "linux":
+        return list(cmd)
+    exe = cmd[0]
+    if not exe or not os.path.isfile(exe) or not is_x86_elf(exe):
+        return list(cmd)
+    dd_fex = "/usr/local/bin/droiddeck-fex"
+    if os.path.isfile(dd_fex) and os.access(dd_fex, os.X_OK):
+        return [dd_fex, "run", "--mode", "on", "--", *cmd]
+    fex = shutil.which("FEXInterpreter") or shutil.which("FEXLoader")
+    if fex:
+        return [fex, *cmd]
+    return list(cmd)
 
 
 def _get_user_dotnet_root() -> str:
@@ -131,15 +218,18 @@ def get_dotnet_env() -> dict[str, str]:
     """
     env = os.environ.copy()
 
-    # 1. Clean AppImage library overrides that break .NET runtime host
+    # 1. Clean AppImage / Steam library overrides that break .NET runtime host
+    #    (including LD_AUDIT so SLSsteam.so is never injected into dotnet)
     env.pop("LD_LIBRARY_PATH", None)
     env.pop("LD_PRELOAD", None)
+    env.pop("LD_AUDIT", None)
 
     # 2. Check bundled .dotnet inside AppImage / portable app directory first
     from utils.paths import Paths
 
+    dotnet_bin = "dotnet.exe" if sys.platform == "win32" else "dotnet"
     bundled_dotnet = Paths.BASE_DIR.parent / ".dotnet"
-    if not (bundled_dotnet / "dotnet").exists():
+    if not (bundled_dotnet / dotnet_bin).exists():
         bundled_dotnet = Paths.BASE_DIR / ".dotnet"
 
     local_dotnet = Path.home() / ".dotnet"
@@ -147,7 +237,7 @@ def get_dotnet_env() -> dict[str, str]:
     usr_lib_dotnet = Path("/usr/lib/dotnet")
 
     dotnet_dir = None
-    if (bundled_dotnet / ("dotnet.exe" if sys.platform == "win32" else "dotnet")).exists():
+    if (bundled_dotnet / dotnet_bin).exists():
         dotnet_dir = bundled_dotnet
     elif local_dotnet.exists():
         dotnet_dir = local_dotnet
@@ -164,6 +254,17 @@ def get_dotnet_env() -> dict[str, str]:
 
     # Prevent ICU globalization missing crashes on SteamOS/minimal Linux
     env.setdefault("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1")
+    env.setdefault("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
+    env.setdefault("DOTNET_NOLOGO", "1")
+
+    # Android/proot/DroidDeck kernel compatibility for .NET 9 CoreCLR:
+    # W^X enforcement and Server GC multi-GB virtual reservations can crash
+    # CoreCLR with SIGSEGV / 0x8007000E inside unrooted Android userlands.
+    if is_droiddeck():
+        env.setdefault("DOTNET_EnableWriteXorExecute", "0")
+        env.setdefault("COMPlus_EnableWriteXorExecute", "0")
+        env.setdefault("DOTNET_gcServer", "0")
+        env.setdefault("DOTNET_EnableDiagnostics", "0")
 
     return env
 
@@ -747,6 +848,13 @@ def _get_slscheevo_path() -> Path:
     script_path = Paths.deps("SLScheevo/SLScheevo.py")
 
     if binary_path.exists():
+        # On ARM64, avoid choosing an x86 ELF binary when the pure-Python script
+        # is available right next to it.
+        if is_arm64() and is_x86_elf(binary_path) and script_path.exists():
+            logger.info(
+                f"Detected x86 SLScheevo binary on ARM64; preferring Python script at: {script_path}"
+            )
+            return script_path
         logger.info(f"Using SLScheevo executable at: {binary_path}")
         return binary_path
 

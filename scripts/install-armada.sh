@@ -80,9 +80,9 @@ else
 fi
 
 # 5. Clone / Sync ASSella Source Repository (arm64 branch)
-echo -e "\n${BLUE}[3/5] Setting up ASSella (arm64 branch)...${NC}"
-REPO_URL="https://github.com/niwia/ASSella.git"
-BRANCH="arm64"
+echo -e "\n${BLUE}[3/5] Setting up ASSella (ARM64 / Armada OS)...${NC}"
+REPO_URL="${ARMSSELLA_REPO_URL:-https://github.com/niwia/ASSella.git}"
+BRANCH="${ARMSSELLA_BRANCH:-arm64}"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "Updating existing installation in $INSTALL_DIR..."
@@ -116,10 +116,16 @@ echo "Installing Python dependencies (PyQt6, requests, etc.)..."
 echo -e "${GREEN}✓ Python virtual environment configured.${NC}"
 
 # 6b. Kuroko Stealth Proxy (ARM64 wireproxy binary)
-if [[ ! -x "$INSTALL_DIR/src/deps/wireproxy" ]] || file -b "$INSTALL_DIR/src/deps/wireproxy" 2>/dev/null | grep -q "x86-64"; then
+NEED_WIREPROXY=0
+if [[ ! -x "$INSTALL_DIR/src/deps/wireproxy" ]]; then
+    NEED_WIREPROXY=1
+elif command -v file &>/dev/null && file -b "$INSTALL_DIR/src/deps/wireproxy" 2>/dev/null | grep -q "x86-64"; then
+    NEED_WIREPROXY=1
+fi
+if [[ "$NEED_WIREPROXY" -eq 1 ]]; then
     echo "Configuring native ARM64 wireproxy binary for Kuroko stealth proxy..."
     WP_TMP=$(mktemp -d)
-    if curl -fsSL --retry 3 "https://github.com/windtf/wireproxy/releases/download/v0.3.2/wireproxy_linux_arm64.tar.gz" -o "$WP_TMP/wireproxy.tar.gz" 2>/dev/null; then
+    if curl -fsSL --retry 3 "https://github.com/windtf/wireproxy/releases/download/v1.1.3/wireproxy_linux_arm64.tar.gz" -o "$WP_TMP/wireproxy.tar.gz" 2>/dev/null; then
         tar -xzf "$WP_TMP/wireproxy.tar.gz" -C "$WP_TMP" 2>/dev/null || true
         if [[ -f "$WP_TMP/wireproxy" ]]; then
             mkdir -p "$INSTALL_DIR/src/deps"
@@ -146,7 +152,10 @@ fi
 LAUNCHER="$BIN_DIR/assella"
 cat << 'EOF' > "$LAUNCHER"
 #!/usr/bin/env bash
-# ASSella ARM64 Launcher
+# ASSella ARM64 / Armada OS Launcher
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+export QTWEBENGINE_DISABLE_SANDBOX=1
+unset LD_AUDIT
 export DOTNET_ROOT="${HOME}/.dotnet"
 export PATH="${HOME}/.dotnet:${HOME}/.local/bin:${PATH}"
 export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1

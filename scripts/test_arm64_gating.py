@@ -19,7 +19,7 @@ class TestArm64Gating(unittest.TestCase):
         if self.orig_arm64 is not None:
             os.environ["ASSELLA_FORCE_ARM64"] = self.orig_arm64
         else:
-            os.environ.pop("ASSELLA_FORCE_ARMADA", None)
+            os.environ.pop("ASSELLA_FORCE_ARM64", None)
 
         if self.orig_armada is not None:
             os.environ["ASSELLA_FORCE_ARMADA"] = self.orig_armada
@@ -144,6 +144,73 @@ class TestArm64Gating(unittest.TestCase):
             install_cmd = mock_run.call_args_list[1][0][0]
             self.assertIn("--architecture", install_cmd)
             self.assertIn("arm64", install_cmd)
+
+    def test_dotnet_env_strips_ld_audit(self):
+        from utils.helpers import get_dotnet_env
+
+        with patch.dict(
+            os.environ,
+            {
+                "LD_AUDIT": "/home/user/.local/share/SLSsteam/SLSsteam.so",
+                "LD_PRELOAD": "/usr/lib/gameoverlayrenderer.so",
+                "LD_LIBRARY_PATH": "/tmp/.mount_app/usr/lib",
+            },
+            clear=False,
+        ):
+            env = get_dotnet_env()
+            self.assertNotIn("LD_AUDIT", env)
+            self.assertNotIn("LD_PRELOAD", env)
+            self.assertNotIn("LD_LIBRARY_PATH", env)
+
+    def test_updater_extracts_arm64_assets_and_refuses_x86_only(self):
+        from managers.app_update_manager import _extract_release_assets, _resolve_sha256_sidecar
+
+        os.environ["ASSELLA_FORCE_ARM64"] = "1"
+        mixed_release = {
+            "assets": [
+                {
+                    "name": "ASSella.AppImage",
+                    "browser_download_url": "https://example.invalid/ASSella.AppImage",
+                    "digest": "sha256:" + ("a" * 64),
+                },
+                {
+                    "name": "ASSella.AppImage.zsync",
+                    "browser_download_url": "https://example.invalid/ASSella.AppImage.zsync",
+                },
+                {
+                    "name": "ASSella-arm64.AppImage",
+                    "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage",
+                    "digest": "sha256:" + ("b" * 64),
+                },
+                {
+                    "name": "ASSella-arm64.AppImage.zsync",
+                    "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage.zsync",
+                },
+                {
+                    "name": "ASSella-arm64.AppImage.sha256",
+                    "browser_download_url": "https://example.invalid/ASSella-arm64.AppImage.sha256",
+                },
+            ]
+        }
+        dl_url, zsync_url, sha = _extract_release_assets(mixed_release)
+        self.assertEqual(dl_url, "https://example.invalid/ASSella-arm64.AppImage")
+        self.assertEqual(zsync_url, "https://example.invalid/ASSella-arm64.AppImage.zsync")
+        self.assertEqual(sha, "b" * 64)
+
+        sidecar_url, advertised = _resolve_sha256_sidecar(mixed_release, dl_url)
+        self.assertTrue(advertised)
+        self.assertEqual(sidecar_url, "https://example.invalid/ASSella-arm64.AppImage.sha256")
+
+        x86_only_release = {
+            "assets": [
+                {
+                    "name": "ASSella.AppImage",
+                    "browser_download_url": "https://example.invalid/ASSella.AppImage",
+                }
+            ]
+        }
+        with self.assertRaises(RuntimeError):
+            _extract_release_assets(x86_only_release)
 
 
 if __name__ == "__main__":

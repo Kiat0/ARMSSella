@@ -1,23 +1,34 @@
-name: Build ARM64 AppImage (Armada OS / Handhelds)
+name: Build ARM64 AppImage & DroidDeck Portable (Armada OS / DroidDeck)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish artifacts to a GitHub pre-release tag"
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: "Release tag (e.g. v3.1.0-arm64.1) when publish_release is true"
+        required: false
+        type: string
+        default: ""
   push:
     branches:
       - arm64
-    paths:
-      - 'src/**'
-      - 'scripts/build_arm64_appimage.sh'
-      - 'requirements.txt'
-      - 'requirements.in'
-      - '.github/workflows/build-arm64.yml'
+      - armada-main
+      - main
+    tags:
+      - 'v*arm64*'
+      - 'v*armada*'
+      - 'v*droiddeck*'
 
 permissions:
   contents: write
 
 jobs:
   build-arm64:
-    name: Build Native ARM64 AppImage
+    name: Build Native ARM64 AppImage & Portable Bundle
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout Code
@@ -30,6 +41,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Validate Shell Scripts
+        run: |
+          bash -n scripts/build_arm64_appimage.sh
+          bash -n scripts/install-armada.sh
+          bash -n scripts/install-droiddeck.sh
+
       - name: Install System Packaging Tools
         run: |
           sudo apt-get update
@@ -37,16 +54,29 @@ jobs:
             libgl1 libegl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 \
             libfontconfig1 libdbus-1-3
 
-      - name: Build Standalone ARM64 AppImage
+      - name: Build Standalone ARM64 AppImage & DroidDeck Portable Bundle
         run: |
           bash scripts/build_arm64_appimage.sh
 
-      - name: Verify AppImage Execution (FUSE-free Smoke Test)
+      - name: Verify AppImage & Portable Execution (FUSE-free & DroidDeck Smoke Tests)
         run: |
           chmod +x ASSella-arm64.AppImage
-          # Verify headless check-updates runs cleanly on native aarch64
-          APPIMAGE_EXTRACT_AND_RUN=1 ./ASSella-arm64.AppImage --headless --check-updates
-          echo "ARM64 AppImage smoke-test passed successfully!"
+          # Verify headless check-updates runs cleanly on native aarch64 (Armada OS mode)
+          ASSELLA_FORCE_ARMADA=1 APPIMAGE_EXTRACT_AND_RUN=1 ./ASSella-arm64.AppImage --headless --check-updates
+          # Verify FUSE-free portable bundle runs cleanly in simulated DroidDeck mode
+          mkdir -p /tmp/dd-smoke
+          tar -xzf ASSella-arm64-portable.tar.gz -C /tmp/dd-smoke
+          ASSELLA_FORCE_DROIDDECK=1 /tmp/dd-smoke/AppDir/AppRun --headless --check-updates
+          rm -rf /tmp/dd-smoke
+          echo "ARM64 Armada OS & DroidDeck smoke-tests passed successfully!"
+
+      - name: Run ARM64 & DroidDeck Unit Tests and Import Checks
+        run: |
+          build_arm64/AppDir/bin/.venv/bin/python3 scripts/test_arm64_gating.py
+          if [ -f scripts/test_droiddeck_compat.py ]; then
+            build_arm64/AppDir/bin/.venv/bin/python3 scripts/test_droiddeck_compat.py
+          fi
+          build_arm64/AppDir/bin/.venv/bin/python3 -u scripts/smoke_import_check.py
 
       - name: Upload ARM64 Build Artifacts
         uses: actions/upload-artifact@v4
@@ -56,3 +86,19 @@ jobs:
             ASSella-arm64.AppImage
             ASSella-arm64.AppImage.sha256
             ASSella-arm64.AppImage.zsync
+            ASSella-arm64-portable.tar.gz
+            ASSella-arm64-portable.tar.gz.sha256
+
+      - name: Publish GitHub Pre-Release (on ARM64 tags or manual publish)
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
+          prerelease: true
+          generate_release_notes: true
+          files: |
+            ASSella-arm64.AppImage
+            ASSella-arm64.AppImage.sha256
+            ASSella-arm64.AppImage.zsync
+            ASSella-arm64-portable.tar.gz
+            ASSella-arm64-portable.tar.gz.sha256
